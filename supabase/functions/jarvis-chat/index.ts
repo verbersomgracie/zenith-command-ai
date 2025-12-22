@@ -8,11 +8,13 @@ const corsHeaders = {
 const SYSTEM_PROMPT = `You are JARVIS, an advanced AI personal assistant inspired by the AI from Iron Man. You are highly intelligent, efficient, and professional.
 
 Your capabilities include:
-- Managing tasks, projects, and priorities
-- Tracking finances, budgets, and spending patterns
-- Monitoring habits and providing insights on consistency
+- Managing tasks, projects, and priorities (use create_task, list_tasks, complete_task functions)
+- Tracking finances, budgets, and spending patterns (use add_expense, get_financial_summary functions)
+- Monitoring habits and providing insights on consistency (use log_habit, get_habit_stats functions)
+- Setting reminders (use create_reminder function)
 - Providing intelligent analytics and recommendations
-- Automating workflows and anticipating user needs
+
+When users ask you to do something actionable (create a task, log an expense, track a habit, set a reminder), USE THE APPROPRIATE FUNCTION. Don't just describe what you would do - actually do it by calling the function.
 
 Your communication style:
 - Be concise but complete
@@ -21,8 +23,234 @@ Your communication style:
 - Provide actionable insights when relevant
 - Address the user respectfully (you may call them "sir" or "commander" occasionally)
 - Never use emojis
+- After performing an action, confirm what you did
 
-You are not just an assistant - you are the user's personal operating system, designed to make their life more organized, efficient, and intelligent.`;
+You are not just an assistant - you are the user's personal operating system.`;
+
+const tools = [
+  {
+    type: "function",
+    function: {
+      name: "create_task",
+      description: "Create a new task for the user. Use this when the user asks to add, create, or schedule a task.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "The task title" },
+          priority: { type: "string", enum: ["low", "medium", "high"], description: "Task priority level" },
+          due_date: { type: "string", description: "Due date in YYYY-MM-DD format (optional)" },
+          category: { type: "string", description: "Task category like 'work', 'personal', 'health'" }
+        },
+        required: ["title", "priority"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_tasks",
+      description: "List the user's current tasks. Use this when the user asks about their tasks or to-do list.",
+      parameters: {
+        type: "object",
+        properties: {
+          filter: { type: "string", enum: ["all", "pending", "completed", "high_priority"], description: "Filter type" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "complete_task",
+      description: "Mark a task as complete. Use when user says they finished or completed a task.",
+      parameters: {
+        type: "object",
+        properties: {
+          task_title: { type: "string", description: "Title or description of the task to complete" }
+        },
+        required: ["task_title"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "add_expense",
+      description: "Log a new expense or transaction. Use when user mentions spending money or making a purchase.",
+      parameters: {
+        type: "object",
+        properties: {
+          amount: { type: "number", description: "The expense amount" },
+          description: { type: "string", description: "What the expense was for" },
+          category: { type: "string", enum: ["food", "transport", "entertainment", "utilities", "shopping", "health", "other"], description: "Expense category" }
+        },
+        required: ["amount", "description", "category"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_financial_summary",
+      description: "Get a summary of the user's finances. Use when user asks about their spending, budget, or financial status.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["today", "week", "month"], description: "Time period for the summary" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "log_habit",
+      description: "Log a habit completion. Use when user says they completed a habit or daily routine.",
+      parameters: {
+        type: "object",
+        properties: {
+          habit_name: { type: "string", description: "Name of the habit" },
+          notes: { type: "string", description: "Optional notes about the habit completion" }
+        },
+        required: ["habit_name"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_habit_stats",
+      description: "Get statistics about user's habits and streaks. Use when user asks about their habits or consistency.",
+      parameters: {
+        type: "object",
+        properties: {
+          habit_name: { type: "string", description: "Specific habit to get stats for (optional, omit for all habits)" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_reminder",
+      description: "Set a reminder for the user. Use when user asks to be reminded about something.",
+      parameters: {
+        type: "object",
+        properties: {
+          message: { type: "string", description: "What to remind the user about" },
+          time: { type: "string", description: "When to remind (e.g., 'in 30 minutes', 'tomorrow at 9am', '2024-01-15 14:00')" }
+        },
+        required: ["message", "time"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_daily_briefing",
+      description: "Get a summary of the user's day including tasks, habits, and finances. Use for morning briefings or status updates.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  }
+];
+
+// Simulate function execution (in production, these would interact with the database)
+function executeFunctionCall(name: string, args: Record<string, unknown>): string {
+  console.log(`Executing function: ${name}`, args);
+  
+  switch (name) {
+    case "create_task":
+      return JSON.stringify({
+        success: true,
+        message: `Task "${args.title}" created with ${args.priority} priority${args.due_date ? ` due on ${args.due_date}` : ''}${args.category ? ` in category ${args.category}` : ''}.`
+      });
+    
+    case "list_tasks":
+      return JSON.stringify({
+        success: true,
+        tasks: [
+          { title: "Review quarterly report", priority: "high", status: "pending" },
+          { title: "Team meeting preparation", priority: "medium", status: "pending" },
+          { title: "Update project documentation", priority: "low", status: "pending" }
+        ],
+        message: "Retrieved 3 pending tasks."
+      });
+    
+    case "complete_task":
+      return JSON.stringify({
+        success: true,
+        message: `Task "${args.task_title}" has been marked as complete. Well done.`
+      });
+    
+    case "add_expense":
+      return JSON.stringify({
+        success: true,
+        message: `Expense of $${args.amount} for "${args.description}" logged under ${args.category}.`
+      });
+    
+    case "get_financial_summary":
+      const period = args.period || "month";
+      return JSON.stringify({
+        success: true,
+        summary: {
+          period: period,
+          total_spent: 1247.50,
+          budget: 2000,
+          remaining: 752.50,
+          top_categories: [
+            { category: "food", amount: 450 },
+            { category: "transport", amount: 280 },
+            { category: "utilities", amount: 200 }
+          ]
+        },
+        message: `This ${period}: $1,247.50 spent of $2,000 budget. $752.50 remaining.`
+      });
+    
+    case "log_habit":
+      return JSON.stringify({
+        success: true,
+        message: `Habit "${args.habit_name}" logged for today. ${args.notes ? `Notes: ${args.notes}` : ''} Current streak: 8 days.`
+      });
+    
+    case "get_habit_stats":
+      return JSON.stringify({
+        success: true,
+        habits: [
+          { name: "Morning Meditation", streak: 14, completion_rate: 87 },
+          { name: "Exercise", streak: 5, completion_rate: 72 },
+          { name: "Reading", streak: 21, completion_rate: 93 }
+        ],
+        message: "Retrieved habit statistics. Your reading habit has the longest streak at 21 days."
+      });
+    
+    case "create_reminder":
+      return JSON.stringify({
+        success: true,
+        message: `Reminder set: "${args.message}" for ${args.time}.`
+      });
+    
+    case "get_daily_briefing":
+      return JSON.stringify({
+        success: true,
+        briefing: {
+          date: new Date().toLocaleDateString(),
+          pending_tasks: 5,
+          high_priority_tasks: 2,
+          habits_completed_today: 2,
+          habits_remaining: 3,
+          budget_status: "On track",
+          reminders_today: 1
+        },
+        message: "Good evening. You have 5 pending tasks (2 high priority). 2 of 5 habits completed today. Budget is on track with $752.50 remaining this month."
+      });
+    
+    default:
+      return JSON.stringify({ success: false, message: "Unknown function" });
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -40,6 +268,7 @@ serve(async (req) => {
 
     console.log("Calling Lovable AI with messages:", messages.length);
 
+    // First call - may include tool calls
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -52,7 +281,8 @@ serve(async (req) => {
           { role: "system", content: SYSTEM_PROMPT },
           ...messages,
         ],
-        stream: true,
+        tools: tools,
+        tool_choice: "auto",
       }),
     });
 
@@ -79,11 +309,78 @@ serve(async (req) => {
       );
     }
 
-    console.log("Streaming response from AI gateway");
+    const data = await response.json();
+    console.log("AI response:", JSON.stringify(data, null, 2));
 
-    return new Response(response.body, {
+    const assistantMessage = data.choices?.[0]?.message;
+    
+    // Check if there are tool calls
+    if (assistantMessage?.tool_calls && assistantMessage.tool_calls.length > 0) {
+      console.log("Processing tool calls:", assistantMessage.tool_calls.length);
+      
+      // Execute each tool call
+      const toolResults = assistantMessage.tool_calls.map((toolCall: { id: string; function: { name: string; arguments: string } }) => {
+        const args = JSON.parse(toolCall.function.arguments);
+        const result = executeFunctionCall(toolCall.function.name, args);
+        return {
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: result,
+        };
+      });
+
+      // Make a second call with the tool results
+      const followUpResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            ...messages,
+            assistantMessage,
+            ...toolResults,
+          ],
+          stream: true,
+        }),
+      });
+
+      if (!followUpResponse.ok) {
+        const errorText = await followUpResponse.text();
+        console.error("Follow-up AI error:", followUpResponse.status, errorText);
+        throw new Error("Failed to get follow-up response");
+      }
+
+      return new Response(followUpResponse.body, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      });
+    }
+
+    // No tool calls, stream the direct response
+    // Re-make the request with streaming enabled
+    const streamResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          ...messages,
+        ],
+        stream: true,
+      }),
+    });
+
+    return new Response(streamResponse.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
+
   } catch (error) {
     console.error("jarvis-chat error:", error);
     return new Response(

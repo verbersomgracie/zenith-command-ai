@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, Sparkles, User, Bot } from "lucide-react";
+import { Send, Mic, Sparkles, User, Bot, Volume2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -15,7 +15,7 @@ const initialMessages: Message[] = [
   {
     id: "1",
     role: "assistant",
-    content: "Good evening. I am JARVIS, your personal AI assistant. I'm ready to help you manage your tasks, track your finances, optimize your habits, and provide intelligent insights. How may I assist you today?",
+    content: "Boa noite, Comandante. Sou JARVIS, seu assistente de inteligência artificial. Estou pronto para auxiliá-lo. Como posso servi-lo?",
     timestamp: new Date(),
   },
 ];
@@ -24,7 +24,10 @@ const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
 
   const scrollToBottom = () => {
@@ -34,6 +37,64 @@ const ChatInterface = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const speakText = async (text: string) => {
+    if (!voiceEnabled) return;
+    
+    try {
+      setIsSpeaking(true);
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/jarvis-tts`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ text }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("TTS request failed");
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      if (audioRef.current) {
+        audioRef.current.pause();
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+      
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      
+      audio.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      await audio.play();
+    } catch (error) {
+      console.error("TTS error:", error);
+      setIsSpeaking(false);
+    }
+  };
+
+  const stopSpeaking = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsSpeaking(false);
+    }
+  };
 
   const streamChat = async (userMessages: { role: string; content: string }[]) => {
     const response = await fetch(
@@ -168,12 +229,17 @@ const ChatInterface = () => {
           }
         }
       }
+      
+      // Speak the response if voice is enabled
+      if (assistantContent && voiceEnabled) {
+        speakText(assistantContent);
+      }
     } catch (error) {
       console.error("Chat error:", error);
       toast({
         variant: "destructive",
-        title: "Connection Error",
-        description: error instanceof Error ? error.message : "Failed to connect to JARVIS",
+        title: "Erro de Conexão",
+        description: error instanceof Error ? error.message : "Falha ao conectar com JARVIS",
       });
       // Remove the empty assistant message if there was an error
       setMessages((prev) => prev.filter((m) => m.content !== ""));
@@ -204,9 +270,32 @@ const ChatInterface = () => {
             <p className="text-xs text-muted-foreground">Neural Link Active</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          Processing Power: 98.7%
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (isSpeaking) {
+                stopSpeaking();
+              } else {
+                setVoiceEnabled(!voiceEnabled);
+              }
+            }}
+            className={`p-2 rounded-lg transition-colors ${
+              voiceEnabled 
+                ? "bg-primary/20 text-primary hover:bg-primary/30" 
+                : "bg-secondary text-muted-foreground hover:bg-secondary/80"
+            } ${isSpeaking ? "animate-pulse" : ""}`}
+            title={isSpeaking ? "Parar áudio" : voiceEnabled ? "Desativar voz" : "Ativar voz"}
+          >
+            {voiceEnabled ? (
+              <Volume2 className={`w-4 h-4 ${isSpeaking ? "text-primary" : ""}`} />
+            ) : (
+              <VolumeX className="w-4 h-4" />
+            )}
+          </button>
+          <div className="text-xs text-muted-foreground">
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse inline-block mr-2" />
+            {isSpeaking ? "Falando..." : "Pronto"}
+          </div>
         </div>
       </motion.div>
 
@@ -296,7 +385,7 @@ const ChatInterface = () => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Enter command or ask JARVIS..."
+            placeholder="Digite um comando ou pergunte ao JARVIS..."
             disabled={isTyping}
             className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm py-2 disabled:opacity-50"
           />
@@ -309,7 +398,7 @@ const ChatInterface = () => {
           </button>
         </div>
         <p className="text-center text-xs text-muted-foreground mt-2">
-          JARVIS is ready to assist • Secure connection established
+          JARVIS pronto para auxiliar • Conexão segura estabelecida
         </p>
       </motion.form>
     </div>

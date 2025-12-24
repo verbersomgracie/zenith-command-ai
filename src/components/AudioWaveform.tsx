@@ -1,48 +1,16 @@
 import { useEffect, useRef, useCallback } from "react";
 
 interface AudioWaveformProps {
-  audioElement: HTMLAudioElement | null;
+  analyser: AnalyserNode | null;
   isSpeaking: boolean;
 }
 
-const AudioWaveform = ({ audioElement, isSpeaking }: AudioWaveformProps) => {
+const AudioWaveform = ({ analyser, isSpeaking }: AudioWaveformProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const animationRef = useRef<number | null>(null);
-  const isConnectedRef = useRef(false);
-
-  const setupAudioContext = useCallback(() => {
-    if (!audioElement || isConnectedRef.current) return;
-
-    try {
-      // Create audio context
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioContext;
-
-      // Create analyser
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.8;
-      analyserRef.current = analyser;
-
-      // Connect audio element to analyser
-      const source = audioContext.createMediaElementSource(audioElement);
-      source.connect(analyser);
-      analyser.connect(audioContext.destination);
-      sourceRef.current = source;
-
-      isConnectedRef.current = true;
-      console.log("Audio context connected successfully");
-    } catch (error) {
-      console.error("Error setting up audio context:", error);
-    }
-  }, [audioElement]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
-    const analyser = analyserRef.current;
     
     if (!canvas || !analyser || !isSpeaking) {
       return;
@@ -64,6 +32,10 @@ const AudioWaveform = ({ audioElement, isSpeaking }: AudioWaveformProps) => {
     const barWidth = 3;
     const minRadius = 30;
     const maxBarHeight = 40;
+
+    // Reset shadow before drawing
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
 
     // Draw radial bars
     for (let i = 0; i < barCount; i++) {
@@ -88,19 +60,18 @@ const AudioWaveform = ({ audioElement, isSpeaking }: AudioWaveformProps) => {
       ctx.strokeStyle = gradient;
       ctx.lineWidth = barWidth;
       ctx.lineCap = "round";
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = "rgba(34, 211, 238, 0.6)";
       ctx.moveTo(startX, startY);
       ctx.lineTo(endX, endY);
       ctx.stroke();
-
-      // Add glow effect
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = "rgba(34, 211, 238, 0.6)";
     }
 
     // Add center glow pulse
     const avgVolume = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
     const pulseRadius = minRadius - 5 + (avgVolume / 255) * 10;
     
+    ctx.shadowBlur = 0;
     const centerGradient = ctx.createRadialGradient(
       centerX, centerY, 0,
       centerX, centerY, pulseRadius
@@ -115,22 +86,11 @@ const AudioWaveform = ({ audioElement, isSpeaking }: AudioWaveformProps) => {
     ctx.fill();
 
     animationRef.current = requestAnimationFrame(draw);
-  }, [isSpeaking]);
-
-  // Setup audio context when audio element is available
-  useEffect(() => {
-    if (audioElement && !isConnectedRef.current) {
-      setupAudioContext();
-    }
-  }, [audioElement, setupAudioContext]);
+  }, [analyser, isSpeaking]);
 
   // Start/stop animation based on speaking state
   useEffect(() => {
-    if (isSpeaking && analyserRef.current) {
-      // Resume audio context if suspended
-      if (audioContextRef.current?.state === "suspended") {
-        audioContextRef.current.resume();
-      }
+    if (isSpeaking && analyser) {
       animationRef.current = requestAnimationFrame(draw);
     } else {
       if (animationRef.current) {
@@ -150,19 +110,7 @@ const AudioWaveform = ({ audioElement, isSpeaking }: AudioWaveformProps) => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isSpeaking, draw]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-        audioContextRef.current.close();
-      }
-    };
-  }, []);
+  }, [isSpeaking, analyser, draw]);
 
   if (!isSpeaking) return null;
 

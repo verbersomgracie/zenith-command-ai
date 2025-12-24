@@ -31,6 +31,11 @@ const ChatInterface = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
 
+  // WebAudio refs (Jarvis effect + waveform base)
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -39,12 +44,75 @@ const ChatInterface = () => {
     scrollToBottom();
   }, [messages]);
 
+  const ensureAudioContext = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioCtxRef.current;
+  };
+
+  const attachJarvisAudioChain = (audioEl: HTMLAudioElement) => {
+    const ctx = ensureAudioContext();
+
+    // Avoid "HTMLMediaElement already connected" error
+    if (!sourceRef.current) {
+      sourceRef.current = ctx.createMediaElementSource(audioEl);
+    }
+
+    // Analyser (for waveform)
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.85;
+    analyserRef.current = analyser;
+
+    // EQ "communicator" style
+    const hpf = ctx.createBiquadFilter();
+    hpf.type = "highpass";
+    hpf.frequency.value = 90;
+
+    const lpf = ctx.createBiquadFilter();
+    lpf.type = "lowpass";
+    lpf.frequency.value = 6000;
+
+    // Compressor (punch/control)
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -22;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.25;
+
+    // Light saturation (AI edge)
+    const shaper = ctx.createWaveShaper();
+    const makeCurve = (amount = 10) => {
+      const n = 44100;
+      const curve = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const x = (i * 2) / n - 1;
+        curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+      }
+      return curve;
+    };
+    shaper.curve = makeCurve(8);
+    shaper.oversample = "2x";
+
+    // Connect chain: source -> filters -> comp -> shaper -> analyser -> output
+    sourceRef.current.connect(hpf);
+    hpf.connect(lpf);
+    lpf.connect(comp);
+    comp.connect(shaper);
+    shaper.connect(analyser);
+    analyser.connect(ctx.destination);
+
+    // Resume context (some browsers require user gesture)
+    if (ctx.state === "suspended") ctx.resume();
+  };
+
   const speakText = async (text: string) => {
     if (!voiceEnabled) return;
-    
+
     try {
       setIsSpeaking(true);
-      
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/jarvis-tts`,
         {
@@ -58,34 +126,48 @@ const ChatInterface = () => {
       );
 
       if (!response.ok) {
-        throw new Error("TTS request failed");
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err?.error || "TTS request failed");
       }
 
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
-      
+
+      // Stop previous audio
       if (audioRef.current) {
         audioRef.current.pause();
         URL.revokeObjectURL(audioRef.current.src);
       }
-      
+
       const audio = new Audio(audioUrl);
+
+      // Deeper voice without changing backend
+      audio.playbackRate = 0.94;
+
       audioRef.current = audio;
-      
+
+      // Jarvis HUD effect + waveform base
+      attachJarvisAudioChain(audio);
+
       audio.onended = () => {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
       };
-      
+
       audio.onerror = () => {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
       };
-      
+
       await audio.play();
     } catch (error) {
       console.error("TTS error:", error);
       setIsSpeaking(false);
+      toast({
+        variant: "destructive",
+        title: "Erro de áudio",
+        description: error instanceof Error ? error.message : "Falha ao reproduzir TTS",
+      });
     }
   };
 
@@ -263,7 +345,7 @@ const ChatInterface = () => {
               <Sparkles className="w-5 h-5 text-primary" />
             </div>
             <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-background" />
-            <AudioWaveform audioElement={audioRef.current} isSpeaking={isSpeaking} />
+            <AudioWaveform analyser={analyserRef.current} isSpeaking={isSpeaking} />
           </div>
           <div>
             <h2 className="font-display text-lg font-semibold text-primary text-glow-sm">

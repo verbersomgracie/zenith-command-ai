@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Mic, Sparkles, User, Bot, Volume2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import AudioWaveform from "./AudioWaveform";
 
 interface Message {
   id: string;
@@ -262,6 +263,7 @@ const ChatInterface = () => {
               <Sparkles className="w-5 h-5 text-primary" />
             </div>
             <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-background" />
+            <AudioWaveform audioElement={audioRef.current} isSpeaking={isSpeaking} />
           </div>
           <div>
             <h2 className="font-display text-lg font-semibold text-primary text-glow-sm">

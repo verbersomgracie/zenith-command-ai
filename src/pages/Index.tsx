@@ -1,16 +1,7 @@
-import { useState } from "react";
-import Sidebar from "@/components/Sidebar";
-import Dashboard from "@/components/Dashboard";
+import JarvisInterface from "@/components/JarvisInterface";
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState("chat");
-
-  return (
-    <div className="min-h-screen bg-background">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-      <Dashboard />
-    </div>
-  );
+  return <JarvisInterface />;
 };
 
 export default Index;

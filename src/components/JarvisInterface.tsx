@@ -1,10 +1,17 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, AlertTriangle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import JarvisCore from "./JarvisCore";
+import DateTimePanel from "./hud/DateTimePanel";
+import SystemStatusPanel from "./hud/SystemStatusPanel";
+import WeatherPanel from "./hud/WeatherPanel";
+import NotesPanel from "./hud/NotesPanel";
+import QuickLinksPanel from "./hud/QuickLinksPanel";
+import NetworkInfoPanel from "./hud/NetworkInfoPanel";
+import CommandHistoryPanel from "./hud/CommandHistoryPanel";
 
 interface Message {
   id: string;
@@ -34,7 +41,6 @@ const JarvisInterface = () => {
     language: "pt-BR",
     onResult: (text) => {
       setInput(text);
-      // Auto-submit after voice recognition
       setTimeout(() => {
         handleVoiceSubmit(text);
       }, 300);
@@ -297,7 +303,6 @@ const JarvisInterface = () => {
     toggleListening();
   };
 
-  // Update input when transcript changes
   useEffect(() => {
     if (transcript) {
       setInput(transcript);
@@ -323,138 +328,176 @@ const JarvisInterface = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen h-screen bg-background flex flex-col overflow-hidden relative">
       {/* Background grid */}
-      <div className="absolute inset-0 bg-grid-pattern opacity-20" />
+      <div className="absolute inset-0 bg-grid-pattern opacity-10" />
       
-      {/* Ambient glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-3xl" />
-      </div>
+      {/* Radial gradient overlay */}
+      <div className="absolute inset-0 bg-radial-gradient pointer-events-none" />
 
-      {/* Header controls */}
-      <motion.div
+      {/* Top status bar */}
+      <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="absolute top-4 right-4 flex items-center gap-3 z-10"
+        className="relative z-20 flex items-center justify-between px-6 py-3 border-b border-primary/20 bg-background/50 backdrop-blur-sm"
       >
-        <button
-          onClick={() => setVoiceEnabled(!voiceEnabled)}
-          className={`p-3 rounded-full glass-card transition-all ${
-            voiceEnabled ? "text-primary border-primary/50" : "text-muted-foreground"
-          }`}
-          title={voiceEnabled ? "Desativar voz" : "Ativar voz"}
-        >
-          {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-        </button>
-        <button
-          onClick={() => setIsOnline(!isOnline)}
-          className={`p-3 rounded-full glass-card transition-all ${
-            isOnline ? "text-green-400 border-green-400/50" : "text-red-400 border-red-400/50"
-          }`}
-          title={isOnline ? "Sistema online" : "Sistema offline"}
-        >
-          <Power className="w-5 h-5" />
-        </button>
-      </motion.div>
-
-      {/* Main JARVIS Core */}
-      <div className="relative z-10 mb-8">
-        <JarvisCore
-          analyser={analyserRef.current}
-          isSpeaking={isSpeaking}
-          isListening={isListening}
-          isProcessing={isProcessing}
-        />
-      </div>
-
-      {/* Message display */}
-      <AnimatePresence mode="wait">
-        {messages.length > 0 && (
-          <motion.div
-            key={messages[messages.length - 1]?.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="max-w-2xl text-center mb-8 px-4"
-          >
-            <p
-              className={`text-lg leading-relaxed ${
-                messages[messages.length - 1]?.role === "assistant"
-                  ? "text-foreground"
-                  : "text-muted-foreground italic"
-              }`}
-            >
-              {messages[messages.length - 1]?.content}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Input area */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="w-full max-w-xl px-4"
-      >
-        <form onSubmit={handleSubmit} className="relative">
-          <div className="glass-card p-2 flex items-center gap-2">
-            {/* Voice button */}
-            <button
-              type="button"
-              onClick={handleMicClick}
-              disabled={!isSupported}
-              className={`p-3 rounded-full transition-all ${
-                isListening
-                  ? "bg-green-500/20 text-green-400 animate-pulse border border-green-500/50"
-                  : "hover:bg-secondary/50 text-muted-foreground hover:text-primary"
-              } ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}`}
-              title={isListening ? "Parar de ouvir" : "Comando de voz"}
-            >
-              {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-            </button>
-
-            {/* Text input */}
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={isListening ? "Ouvindo..." : "Digite um comando..."}
-              disabled={isProcessing || isListening}
-              className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm py-2 disabled:opacity-50"
-            />
-
-            {/* Send button */}
-            <button
-              type="submit"
-              disabled={!input.trim() || isProcessing}
-              className="p-3 rounded-full bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed pulse-glow"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </div>
-        </form>
-
-        {/* Status bar */}
-        <div className="flex justify-center items-center gap-4 mt-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-green-400" : "bg-red-400"} animate-pulse`} />
-            <span>{isOnline ? "Sistema operacional" : "Offline"}</span>
+            <span className="font-display text-xs text-primary">{isOnline ? "ONLINE" : "OFFLINE"}</span>
           </div>
-          <span>•</span>
-          <span>{isListening ? "Capturando voz" : isSpeaking ? "Reproduzindo" : isProcessing ? "Processando" : "Aguardando"}</span>
+          <div className="h-4 w-px bg-primary/30" />
+          <span className="text-xs text-muted-foreground">
+            {isListening ? "VOZ ATIVA" : isSpeaking ? "REPRODUZINDO" : isProcessing ? "PROCESSANDO" : "AGUARDANDO"}
+          </span>
         </div>
-      </motion.div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setVoiceEnabled(!voiceEnabled)}
+            className={`p-2 rounded transition-all ${
+              voiceEnabled ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary"
+            }`}
+            title={voiceEnabled ? "Desativar voz" : "Ativar voz"}
+          >
+            {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => setIsOnline(!isOnline)}
+            className={`p-2 rounded transition-all ${
+              isOnline ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"
+            }`}
+            title={isOnline ? "Sistema online" : "Sistema offline"}
+          >
+            <Power className="w-4 h-4" />
+          </button>
+        </div>
+      </motion.header>
+
+      {/* Main HUD Content */}
+      <main className="flex-1 relative z-10 flex overflow-hidden">
+        {/* Left Panel */}
+        <aside className="w-48 p-4 space-y-4 overflow-y-auto scrollbar-thin">
+          <DateTimePanel />
+          <SystemStatusPanel />
+          <NetworkInfoPanel />
+        </aside>
+
+        {/* Center - JARVIS Core */}
+        <div className="flex-1 flex flex-col items-center justify-center relative px-4">
+          {/* JARVIS Core visualization */}
+          <div className="relative mb-6">
+            <JarvisCore
+              analyser={analyserRef.current}
+              isSpeaking={isSpeaking}
+              isListening={isListening}
+              isProcessing={isProcessing}
+            />
+          </div>
+
+          {/* Message display */}
+          <AnimatePresence mode="wait">
+            {messages.length > 0 && (
+              <motion.div
+                key={messages[messages.length - 1]?.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="max-w-xl text-center mb-6"
+              >
+                <p className={`text-base leading-relaxed ${
+                  messages[messages.length - 1]?.role === "assistant"
+                    ? "text-foreground"
+                    : "text-muted-foreground italic"
+                }`}>
+                  {messages[messages.length - 1]?.content}
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Input area */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="w-full max-w-lg"
+          >
+            <form onSubmit={handleSubmit} className="relative">
+              <div className="bg-card/60 backdrop-blur-sm border border-primary/30 rounded-lg p-2 flex items-center gap-2">
+                {/* Voice button */}
+                <button
+                  type="button"
+                  onClick={handleMicClick}
+                  disabled={!isSupported}
+                  className={`p-3 rounded-full transition-all ${
+                    isListening
+                      ? "bg-green-500/20 text-green-400 animate-pulse border border-green-500/50"
+                      : "hover:bg-secondary/50 text-muted-foreground hover:text-primary"
+                  } ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}`}
+                  title={isListening ? "Parar de ouvir" : "Comando de voz"}
+                >
+                  {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+                </button>
+
+                {/* Text input */}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={isListening ? "Ouvindo..." : "Digite um comando..."}
+                  disabled={isProcessing || isListening}
+                  className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm py-2 disabled:opacity-50"
+                />
+
+                {/* Send button */}
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isProcessing}
+                  className="p-3 rounded-full bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+
+        {/* Right Panel */}
+        <aside className="w-60 p-4 space-y-4 overflow-y-auto scrollbar-thin">
+          <WeatherPanel />
+          <NotesPanel />
+          <QuickLinksPanel />
+          <CommandHistoryPanel />
+        </aside>
+      </main>
+
+      {/* Bottom decorative elements */}
+      <motion.footer
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1 }}
+        className="relative z-10 px-6 py-2 border-t border-primary/20 flex items-center justify-between text-xs"
+      >
+        <div className="flex items-center gap-4 text-muted-foreground">
+          <span>J.A.R.V.I.S. v3.0.1</span>
+          <span>•</span>
+          <span>Latência: 12ms</span>
+        </div>
+        <div className="flex items-center gap-2 text-primary/60">
+          <RefreshCw className="w-3 h-3" />
+          <span>Última sincronização: agora</span>
+        </div>
+      </motion.footer>
 
       {/* Scan line effect */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
         <motion.div
-          className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"
+          className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent"
           initial={{ top: "0%" }}
           animate={{ top: "100%" }}
-          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
         />
       </div>
     </div>

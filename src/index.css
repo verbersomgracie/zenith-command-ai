@@ -170,6 +170,23 @@
       linear-gradient(90deg, hsl(var(--border) / 0.3) 1px, transparent 1px);
     background-size: 40px 40px;
   }
+
+  .bg-radial-gradient {
+    background: radial-gradient(circle at center, transparent 0%, hsl(var(--background)) 70%);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.2);
+    border-radius: 2px;
+  }
 }
 
 @keyframes pulse-glow {

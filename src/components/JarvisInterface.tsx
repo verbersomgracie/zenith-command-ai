@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, AlertTriangle, RefreshCw } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
@@ -12,6 +12,7 @@ import NotesPanel from "./hud/NotesPanel";
 import QuickLinksPanel from "./hud/QuickLinksPanel";
 import NetworkInfoPanel from "./hud/NetworkInfoPanel";
 import CommandHistoryPanel from "./hud/CommandHistoryPanel";
+import BootSequence from "./BootSequence";
 
 interface Message {
   id: string;
@@ -27,9 +28,35 @@ const JarvisInterface = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
+  const [isBooting, setIsBooting] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Fullscreen handlers
+  const toggleFullscreen = useCallback(async () => {
+    if (!document.fullscreenElement) {
+      try {
+        await containerRef.current?.requestFullscreen();
+        setIsFullscreen(true);
+      } catch (err) {
+        console.error("Fullscreen error:", err);
+      }
+    } else {
+      await document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
 
   // WebAudio refs
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -309,8 +336,10 @@ const JarvisInterface = () => {
     }
   }, [transcript]);
 
-  // Initial greeting
+  // Initial greeting - only after boot completes
   useEffect(() => {
+    if (isBooting) return;
+    
     const timer = setTimeout(() => {
       const greeting: Message = {
         id: "initial",
@@ -322,13 +351,18 @@ const JarvisInterface = () => {
       if (voiceEnabled) {
         speakText(greeting.content);
       }
-    }, 1000);
+    }, 500);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [isBooting]);
 
   return (
-    <div className="min-h-screen h-screen bg-background flex flex-col overflow-hidden relative">
+    <div ref={containerRef} className="min-h-screen h-screen bg-background flex flex-col overflow-hidden relative">
+      {/* Boot Sequence */}
+      <AnimatePresence>
+        {isBooting && <BootSequence onComplete={() => setIsBooting(false)} />}
+      </AnimatePresence>
+
       {/* Background grid */}
       <div className="absolute inset-0 bg-grid-pattern opacity-10" />
       
@@ -352,7 +386,14 @@ const JarvisInterface = () => {
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleFullscreen}
+            className="p-2 rounded transition-all text-muted-foreground hover:text-primary hover:bg-primary/10"
+            title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+          >
+            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+          </button>
           <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}
             className={`p-2 rounded transition-all ${

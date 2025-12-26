@@ -11,109 +11,84 @@ interface WeatherPanelProps {
     icon: string;
     city: string;
     country: string;
-    forecast: {
-      day: string;
-      temp: number;
-      icon: string;
-    }[];
+    forecast: { day: string; temp: number; icon: string }[];
   } | null;
   loading: boolean;
   error: string | null;
 }
 
-const getWeatherIcon = (icon: string, className: string = "w-6 h-6") => {
-  switch (icon) {
-    case 'clear':
-      return <Sun className={`${className} text-yellow-400`} />;
-    case 'cloudy':
-    case 'overcast':
-      return <Cloud className={`${className} text-primary`} />;
-    case 'rain':
-    case 'drizzle':
-    case 'showers':
-      return <CloudRain className={`${className} text-blue-400`} />;
-    case 'snow':
-      return <CloudSnow className={`${className} text-blue-200`} />;
-    case 'thunderstorm':
-      return <CloudLightning className={`${className} text-yellow-500`} />;
-    case 'fog':
-      return <CloudFog className={`${className} text-gray-400`} />;
-    default:
-      return <Sun className={`${className} text-yellow-400`} />;
-  }
+const getWeatherIcon = (icon: string, className: string = "w-5 h-5") => {
+  const icons: Record<string, JSX.Element> = {
+    'clear': <Sun className={`${className} text-yellow-400`} />,
+    'cloudy': <Cloud className={`${className} text-primary`} />,
+    'overcast': <Cloud className={`${className} text-primary`} />,
+    'rain': <CloudRain className={`${className} text-blue-400`} />,
+    'drizzle': <CloudRain className={`${className} text-blue-400`} />,
+    'showers': <CloudRain className={`${className} text-blue-400`} />,
+    'snow': <CloudSnow className={`${className} text-blue-200`} />,
+    'thunderstorm': <CloudLightning className={`${className} text-yellow-500`} />,
+    'fog': <CloudFog className={`${className} text-gray-400`} />,
+  };
+  return icons[icon] || <Sun className={`${className} text-yellow-400`} />;
 };
 
 const WeatherPanel = ({ weather, loading, error }: WeatherPanelProps) => {
   return (
-    <HudPanel title="Atmosférico" delay={0.3} variant="bordered" className="w-40">
-      <div className="text-center">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-4">
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            <span className="text-xs text-muted-foreground mt-2">Carregando...</span>
-          </div>
-        ) : error ? (
-          <div className="text-xs text-red-400 py-4">{error}</div>
-        ) : weather ? (
-          <>
-            {/* Temperature display */}
-            <div className="relative inline-block">
-              <motion.div
-                className="font-display text-5xl text-primary text-glow-lg"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
+    <HudPanel title="Clima" delay={0.3} variant="bordered" compact>
+      {loading ? (
+        <div className="flex items-center justify-center py-3">
+          <Loader2 className="w-6 h-6 text-primary animate-spin" />
+        </div>
+      ) : error ? (
+        <div className="text-[10px] text-red-400 py-2">{error}</div>
+      ) : weather ? (
+        <div className="space-y-2">
+          {/* Main temp */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {getWeatherIcon(weather.icon)}
+              <motion.span
+                className="font-display text-2xl text-primary text-glow-sm"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
               >
                 {weather.temperature}°
-              </motion.div>
-              <div className="absolute -right-8 top-0">
-                {getWeatherIcon(weather.icon)}
-              </div>
+              </motion.span>
             </div>
-            
-            <div className="text-xs text-muted-foreground mt-1 mb-4 truncate">
-              {weather.city}{weather.country ? `, ${weather.country}` : ''}
+            <div className="text-right">
+              <div className="text-[10px] text-foreground truncate max-w-[80px]">{weather.city}</div>
+              <div className="text-[10px] text-muted-foreground">{weather.description}</div>
             </div>
-
-            <div className="text-xs text-primary/80 mb-3">{weather.description}</div>
-
-            {/* Weather details */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-secondary/30 rounded p-2">
-                <Droplets className="w-4 h-4 text-primary mx-auto mb-1" />
-                <div className="text-muted-foreground">Umidade</div>
-                <div className="text-primary font-display">{weather.humidity}%</div>
-              </div>
-              <div className="bg-secondary/30 rounded p-2">
-                <Wind className="w-4 h-4 text-primary mx-auto mb-1" />
-                <div className="text-muted-foreground">Vento</div>
-                <div className="text-primary font-display">{weather.windSpeed}km/h</div>
-              </div>
-            </div>
-
-            {/* Forecast bar */}
-            {weather.forecast && weather.forecast.length > 0 && (
-              <div className="mt-3 pt-2 border-t border-primary/20">
-                <div className="flex justify-between text-xs">
-                  {weather.forecast.map((day, index) => (
-                    <div key={index} className="text-center">
-                      <div className="text-muted-foreground">{day.day}</div>
-                      <div className="my-1">
-                        {getWeatherIcon(day.icon, "w-3 h-3 mx-auto")}
-                      </div>
-                      <div className="text-primary">{day.temp}°</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-xs text-muted-foreground py-4">
-            Ative a localização para ver o clima
           </div>
-        )}
-      </div>
+
+          {/* Stats */}
+          <div className="flex gap-3 text-[10px]">
+            <div className="flex items-center gap-1">
+              <Droplets className="w-3 h-3 text-primary" />
+              <span className="text-muted-foreground">{weather.humidity}%</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Wind className="w-3 h-3 text-primary" />
+              <span className="text-muted-foreground">{weather.windSpeed}km/h</span>
+            </div>
+          </div>
+
+          {/* Forecast */}
+          {weather.forecast?.length > 0 && (
+            <div className="flex justify-between pt-2 border-t border-primary/20">
+              {weather.forecast.map((day, i) => (
+                <div key={i} className="text-center text-[10px]">
+                  <div className="text-muted-foreground">{day.day}</div>
+                  <div className="my-0.5">{getWeatherIcon(day.icon, "w-3 h-3 mx-auto")}</div>
+                  <div className="text-primary font-display">{day.temp}°</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-[10px] text-muted-foreground py-2">Ative a localização</div>
+      )}
     </HudPanel>
   );
 };

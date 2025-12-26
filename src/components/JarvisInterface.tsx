@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useRealTimeData } from "@/hooks/useRealTimeData";
+import { useIsMobile } from "@/hooks/use-mobile";
 import JarvisCore from "./JarvisCore";
 import DateTimePanel from "./hud/DateTimePanel";
 import SystemStatusPanel from "./hud/SystemStatusPanel";
@@ -29,10 +30,12 @@ const JarvisInterface = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isBooting, setIsBooting] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   
   // Real-time device data
   const realTimeData = useRealTimeData();
@@ -66,13 +69,11 @@ const JarvisInterface = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
 
   // Voice recognition
-  const { isListening, transcript, isSupported, toggleListening, stopListening } = useVoiceRecognition({
+  const { isListening, transcript, isSupported, toggleListening } = useVoiceRecognition({
     language: "pt-BR",
     onResult: (text) => {
       setInput(text);
-      setTimeout(() => {
-        handleVoiceSubmit(text);
-      }, 300);
+      setTimeout(() => handleVoiceSubmit(text), 300);
     },
     onError: (error) => {
       toast({
@@ -92,11 +93,9 @@ const JarvisInterface = () => {
 
   const attachJarvisAudioChain = (audioEl: HTMLAudioElement) => {
     const ctx = ensureAudioContext();
-
     if (!sourceRef.current) {
       sourceRef.current = ctx.createMediaElementSource(audioEl);
     }
-
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.85;
@@ -141,10 +140,8 @@ const JarvisInterface = () => {
 
   const speakText = async (text: string) => {
     if (!voiceEnabled) return;
-
     try {
       setIsSpeaking(true);
-
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/jarvis-tts`,
         {
@@ -173,19 +170,16 @@ const JarvisInterface = () => {
       const audio = new Audio(audioUrl);
       audio.playbackRate = 0.94;
       audioRef.current = audio;
-
       attachJarvisAudioChain(audio);
 
       audio.onended = () => {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
       };
-
       audio.onerror = () => {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
       };
-
       await audio.play();
     } catch (error) {
       console.error("TTS error:", error);
@@ -218,7 +212,6 @@ const JarvisInterface = () => {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || `HTTP error ${response.status}`);
     }
-
     return response;
   };
 
@@ -243,7 +236,6 @@ const JarvisInterface = () => {
 
     try {
       const response = await streamChat(messageHistory);
-      
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -254,12 +246,7 @@ const JarvisInterface = () => {
 
       setMessages((prev) => [
         ...prev,
-        {
-          id: assistantMessageId,
-          role: "assistant",
-          content: "",
-          timestamp: new Date(),
-        },
+        { id: assistantMessageId, role: "assistant", content: "", timestamp: new Date() },
       ]);
 
       while (true) {
@@ -287,9 +274,7 @@ const JarvisInterface = () => {
               assistantContent += content;
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantMessageId
-                    ? { ...m, content: assistantContent }
-                    : m
+                  m.id === assistantMessageId ? { ...m, content: assistantContent } : m
                 )
               );
             }
@@ -326,22 +311,17 @@ const JarvisInterface = () => {
   };
 
   const handleMicClick = () => {
-    if (isSpeaking) {
-      stopSpeaking();
-    }
+    if (isSpeaking) stopSpeaking();
     toggleListening();
   };
 
   useEffect(() => {
-    if (transcript) {
-      setInput(transcript);
-    }
+    if (transcript) setInput(transcript);
   }, [transcript]);
 
-  // Initial greeting - only after boot completes
+  // Initial greeting
   useEffect(() => {
     if (isBooting) return;
-    
     const timer = setTimeout(() => {
       const greeting: Message = {
         id: "initial",
@@ -350,13 +330,52 @@ const JarvisInterface = () => {
         timestamp: new Date(),
       };
       setMessages([greeting]);
-      if (voiceEnabled) {
-        speakText(greeting.content);
-      }
+      if (voiceEnabled) speakText(greeting.content);
     }, 500);
-
     return () => clearTimeout(timer);
   }, [isBooting]);
+
+  // Close sidebar when clicking outside on mobile
+  useEffect(() => {
+    if (!isMobile) setSidebarOpen(false);
+  }, [isMobile]);
+
+  // Panel content for sidebar
+  const LeftPanels = (
+    <div className="space-y-3">
+      <DateTimePanel />
+      <SystemStatusPanel 
+        cpu={realTimeData.device.cpu}
+        memory={realTimeData.device.memory}
+        battery={realTimeData.device.battery}
+        network={realTimeData.device.network}
+        uptime={realTimeData.uptime}
+      />
+      <NetworkInfoPanel 
+        network={realTimeData.device.network}
+        location={{
+          latitude: realTimeData.location.latitude,
+          longitude: realTimeData.location.longitude,
+          accuracy: realTimeData.location.accuracy,
+          loading: realTimeData.location.loading,
+          error: realTimeData.location.error,
+        }}
+      />
+    </div>
+  );
+
+  const RightPanels = (
+    <div className="space-y-3">
+      <WeatherPanel 
+        weather={realTimeData.weather.weather}
+        loading={realTimeData.weather.loading}
+        error={realTimeData.weather.error}
+      />
+      <NotesPanel />
+      <QuickLinksPanel />
+      <CommandHistoryPanel />
+    </div>
+  );
 
   return (
     <div ref={containerRef} className="min-h-screen h-screen bg-background flex flex-col overflow-hidden relative">
@@ -365,85 +384,95 @@ const JarvisInterface = () => {
         {isBooting && <BootSequence onComplete={() => setIsBooting(false)} />}
       </AnimatePresence>
 
-      {/* Background grid */}
+      {/* Background */}
       <div className="absolute inset-0 bg-grid-pattern opacity-10" />
-      
-      {/* Radial gradient overlay */}
       <div className="absolute inset-0 bg-radial-gradient pointer-events-none" />
 
       {/* Top status bar */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative z-20 flex items-center justify-between px-6 py-3 border-b border-primary/20 bg-background/50 backdrop-blur-sm"
+        className="relative z-20 flex items-center justify-between px-3 md:px-6 py-2 border-b border-primary/20 bg-background/50 backdrop-blur-sm"
       >
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
+          {/* Mobile menu button */}
+          {isMobile && (
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded text-primary hover:bg-primary/10"
+            >
+              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          )}
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${realTimeData.device.network.online ? "bg-green-400" : "bg-red-400"} animate-pulse`} />
-            <span className="font-display text-xs text-primary">{realTimeData.device.network.online ? "ONLINE" : "OFFLINE"}</span>
+            <span className="font-display text-[10px] md:text-xs text-primary hidden sm:inline">
+              {realTimeData.device.network.online ? "ONLINE" : "OFFLINE"}
+            </span>
           </div>
-          <div className="h-4 w-px bg-primary/30" />
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[10px] text-muted-foreground hidden md:inline">
             {isListening ? "VOZ ATIVA" : isSpeaking ? "REPRODUZINDO" : isProcessing ? "PROCESSANDO" : "AGUARDANDO"}
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggleFullscreen}
-            className="p-2 rounded transition-all text-muted-foreground hover:text-primary hover:bg-primary/10"
-            title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
-          >
-            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-          </button>
+        <div className="flex items-center gap-1 md:gap-2">
+          {!isMobile && (
+            <button
+              onClick={toggleFullscreen}
+              className="p-2 rounded text-muted-foreground hover:text-primary hover:bg-primary/10"
+            >
+              {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+            </button>
+          )}
           <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}
-            className={`p-2 rounded transition-all ${
-              voiceEnabled ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-primary"
-            }`}
-            title={voiceEnabled ? "Desativar voz" : "Ativar voz"}
+            className={`p-2 rounded ${voiceEnabled ? "text-primary bg-primary/10" : "text-muted-foreground"}`}
           >
             {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
-          <div
-            className={`p-2 rounded ${
-              realTimeData.device.network.online ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"
-            }`}
-            title={realTimeData.device.network.online ? "Sistema online" : "Sistema offline"}
-          >
+          <div className={`p-2 rounded ${realTimeData.device.network.online ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"}`}>
             <Power className="w-4 h-4" />
           </div>
         </div>
       </motion.header>
 
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isMobile && sidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-background/80 backdrop-blur-sm z-30"
+              onClick={() => setSidebarOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed left-0 top-0 bottom-0 w-[280px] bg-background border-r border-primary/20 z-40 pt-16 p-4 overflow-y-auto"
+            >
+              {LeftPanels}
+              <div className="mt-4">{RightPanels}</div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main HUD Content */}
       <main className="flex-1 relative z-10 flex overflow-hidden">
-        {/* Left Panel */}
-        <aside className="w-48 p-4 space-y-4 overflow-y-auto scrollbar-thin">
-          <DateTimePanel />
-          <SystemStatusPanel 
-            cpu={realTimeData.device.cpu}
-            memory={realTimeData.device.memory}
-            battery={realTimeData.device.battery}
-            network={realTimeData.device.network}
-            uptime={realTimeData.uptime}
-          />
-          <NetworkInfoPanel 
-            network={realTimeData.device.network}
-            location={{
-              latitude: realTimeData.location.latitude,
-              longitude: realTimeData.location.longitude,
-              accuracy: realTimeData.location.accuracy,
-              loading: realTimeData.location.loading,
-              error: realTimeData.location.error,
-            }}
-          />
-        </aside>
+        {/* Left Panel - Desktop only */}
+        {!isMobile && (
+          <aside className="w-44 lg:w-48 p-3 space-y-3 overflow-y-auto scrollbar-thin flex-shrink-0">
+            {LeftPanels}
+          </aside>
+        )}
 
         {/* Center - JARVIS Core */}
         <div className="flex-1 flex flex-col items-center justify-center relative px-4">
-          {/* JARVIS Core visualization */}
-          <div className="relative mb-6">
+          <div className="relative mb-4 md:mb-6">
             <JarvisCore
               analyser={analyserRef.current}
               isSpeaking={isSpeaking}
@@ -460,12 +489,10 @@ const JarvisInterface = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="max-w-xl text-center mb-6"
+                className="max-w-md md:max-w-xl text-center mb-4 md:mb-6 px-4"
               >
-                <p className={`text-base leading-relaxed ${
-                  messages[messages.length - 1]?.role === "assistant"
-                    ? "text-foreground"
-                    : "text-muted-foreground italic"
+                <p className={`text-sm md:text-base leading-relaxed ${
+                  messages[messages.length - 1]?.role === "assistant" ? "text-foreground" : "text-muted-foreground italic"
                 }`}>
                   {messages[messages.length - 1]?.content}
                 </p>
@@ -478,26 +505,23 @@ const JarvisInterface = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="w-full max-w-lg"
+            className="w-full max-w-md md:max-w-lg px-4"
           >
-            <form onSubmit={handleSubmit} className="relative">
+            <form onSubmit={handleSubmit}>
               <div className="bg-card/60 backdrop-blur-sm border border-primary/30 rounded-lg p-2 flex items-center gap-2">
-                {/* Voice button */}
                 <button
                   type="button"
                   onClick={handleMicClick}
                   disabled={!isSupported}
-                  className={`p-3 rounded-full transition-all ${
+                  className={`p-2 md:p-3 rounded-full transition-all ${
                     isListening
                       ? "bg-green-500/20 text-green-400 animate-pulse border border-green-500/50"
                       : "hover:bg-secondary/50 text-muted-foreground hover:text-primary"
                   } ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}`}
-                  title={isListening ? "Parar de ouvir" : "Comando de voz"}
                 >
                   {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
                 </button>
 
-                {/* Text input */}
                 <input
                   ref={inputRef}
                   type="text"
@@ -508,11 +532,10 @@ const JarvisInterface = () => {
                   className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm py-2 disabled:opacity-50"
                 />
 
-                {/* Send button */}
                 <button
                   type="submit"
                   disabled={!input.trim() || isProcessing}
-                  className="p-3 rounded-full bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 md:p-3 rounded-full bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="w-5 h-5" />
                 </button>
@@ -521,40 +544,33 @@ const JarvisInterface = () => {
           </motion.div>
         </div>
 
-        {/* Right Panel */}
-        <aside className="w-60 p-4 space-y-4 overflow-y-auto scrollbar-thin">
-          <WeatherPanel 
-            weather={realTimeData.weather.weather}
-            loading={realTimeData.weather.loading}
-            error={realTimeData.weather.error}
-          />
-          <NotesPanel />
-          <QuickLinksPanel />
-          <CommandHistoryPanel />
-        </aside>
+        {/* Right Panel - Desktop only */}
+        {!isMobile && (
+          <aside className="w-44 lg:w-48 p-3 space-y-3 overflow-y-auto scrollbar-thin flex-shrink-0">
+            {RightPanels}
+          </aside>
+        )}
       </main>
 
-      {/* Bottom decorative elements */}
+      {/* Footer */}
       <motion.footer
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1 }}
-        className="relative z-10 px-6 py-2 border-t border-primary/20 flex items-center justify-between text-xs"
+        className="relative z-10 px-3 md:px-6 py-2 border-t border-primary/20 flex items-center justify-between text-[10px] md:text-xs"
       >
-        <div className="flex items-center gap-4 text-muted-foreground">
-          <span>J.A.R.V.I.S. v3.0.1</span>
-          <span>•</span>
-          <span>Latência: {realTimeData.device.network.rtt ?? '--'}ms</span>
-          <span>•</span>
-          <span>CPU: {realTimeData.device.cpu.usage}%</span>
+        <div className="flex items-center gap-2 md:gap-4 text-muted-foreground">
+          <span>JARVIS v3.0</span>
+          <span className="hidden sm:inline">•</span>
+          <span className="hidden sm:inline">{realTimeData.device.network.rtt ?? '--'}ms</span>
         </div>
         <div className="flex items-center gap-2 text-primary/60">
           <RefreshCw className="w-3 h-3 animate-spin" style={{ animationDuration: '3s' }} />
-          <span>Atualizado: {realTimeData.currentTime.toLocaleTimeString('pt-BR')}</span>
+          <span className="hidden sm:inline">{realTimeData.currentTime.toLocaleTimeString('pt-BR')}</span>
         </div>
       </motion.footer>
 
-      {/* Scan line effect */}
+      {/* Scan line */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
         <motion.div
           className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent"

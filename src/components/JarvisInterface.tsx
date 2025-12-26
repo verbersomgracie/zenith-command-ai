@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useRealTimeData } from "@/hooks/useRealTimeData";
 import JarvisCore from "./JarvisCore";
 import DateTimePanel from "./hud/DateTimePanel";
 import SystemStatusPanel from "./hud/SystemStatusPanel";
@@ -27,13 +27,15 @@ const JarvisInterface = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
   const [isBooting, setIsBooting] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  
+  // Real-time device data
+  const realTimeData = useRealTimeData();
 
   // Fullscreen handlers
   const toggleFullscreen = useCallback(async () => {
@@ -377,8 +379,8 @@ const JarvisInterface = () => {
       >
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-green-400" : "bg-red-400"} animate-pulse`} />
-            <span className="font-display text-xs text-primary">{isOnline ? "ONLINE" : "OFFLINE"}</span>
+            <div className={`w-2 h-2 rounded-full ${realTimeData.device.network.online ? "bg-green-400" : "bg-red-400"} animate-pulse`} />
+            <span className="font-display text-xs text-primary">{realTimeData.device.network.online ? "ONLINE" : "OFFLINE"}</span>
           </div>
           <div className="h-4 w-px bg-primary/30" />
           <span className="text-xs text-muted-foreground">
@@ -403,15 +405,14 @@ const JarvisInterface = () => {
           >
             {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
-          <button
-            onClick={() => setIsOnline(!isOnline)}
-            className={`p-2 rounded transition-all ${
-              isOnline ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"
+          <div
+            className={`p-2 rounded ${
+              realTimeData.device.network.online ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"
             }`}
-            title={isOnline ? "Sistema online" : "Sistema offline"}
+            title={realTimeData.device.network.online ? "Sistema online" : "Sistema offline"}
           >
             <Power className="w-4 h-4" />
-          </button>
+          </div>
         </div>
       </motion.header>
 
@@ -420,8 +421,23 @@ const JarvisInterface = () => {
         {/* Left Panel */}
         <aside className="w-48 p-4 space-y-4 overflow-y-auto scrollbar-thin">
           <DateTimePanel />
-          <SystemStatusPanel />
-          <NetworkInfoPanel />
+          <SystemStatusPanel 
+            cpu={realTimeData.device.cpu}
+            memory={realTimeData.device.memory}
+            battery={realTimeData.device.battery}
+            network={realTimeData.device.network}
+            uptime={realTimeData.uptime}
+          />
+          <NetworkInfoPanel 
+            network={realTimeData.device.network}
+            location={{
+              latitude: realTimeData.location.latitude,
+              longitude: realTimeData.location.longitude,
+              accuracy: realTimeData.location.accuracy,
+              loading: realTimeData.location.loading,
+              error: realTimeData.location.error,
+            }}
+          />
         </aside>
 
         {/* Center - JARVIS Core */}
@@ -507,7 +523,11 @@ const JarvisInterface = () => {
 
         {/* Right Panel */}
         <aside className="w-60 p-4 space-y-4 overflow-y-auto scrollbar-thin">
-          <WeatherPanel />
+          <WeatherPanel 
+            weather={realTimeData.weather.weather}
+            loading={realTimeData.weather.loading}
+            error={realTimeData.weather.error}
+          />
           <NotesPanel />
           <QuickLinksPanel />
           <CommandHistoryPanel />
@@ -524,11 +544,13 @@ const JarvisInterface = () => {
         <div className="flex items-center gap-4 text-muted-foreground">
           <span>J.A.R.V.I.S. v3.0.1</span>
           <span>•</span>
-          <span>Latência: 12ms</span>
+          <span>Latência: {realTimeData.device.network.rtt ?? '--'}ms</span>
+          <span>•</span>
+          <span>CPU: {realTimeData.device.cpu.usage}%</span>
         </div>
         <div className="flex items-center gap-2 text-primary/60">
-          <RefreshCw className="w-3 h-3" />
-          <span>Última sincronização: agora</span>
+          <RefreshCw className="w-3 h-3 animate-spin" style={{ animationDuration: '3s' }} />
+          <span>Atualizado: {realTimeData.currentTime.toLocaleTimeString('pt-BR')}</span>
         </div>
       </motion.footer>
 

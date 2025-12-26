@@ -49,7 +49,18 @@ export const useVoiceRecognition = (options: UseVoiceRecognitionOptions = {}) =>
   const [transcript, setTranscript] = useState("");
   const [isSupported, setIsSupported] = useState(true);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const isListeningRef = useRef(false);
+  
+  // Store callbacks in refs to avoid recreating recognition
+  const onResultRef = useRef(onResult);
+  const onErrorRef = useRef(onError);
+  
+  useEffect(() => {
+    onResultRef.current = onResult;
+    onErrorRef.current = onError;
+  }, [onResult, onError]);
 
+  // Initialize recognition only once
   useEffect(() => {
     const SpeechRecognitionAPI =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -65,10 +76,12 @@ export const useVoiceRecognition = (options: UseVoiceRecognitionOptions = {}) =>
     recognition.lang = language;
 
     recognition.onstart = () => {
+      isListeningRef.current = true;
       setIsListening(true);
     };
 
     recognition.onend = () => {
+      isListeningRef.current = false;
       setIsListening(false);
     };
 
@@ -87,49 +100,81 @@ export const useVoiceRecognition = (options: UseVoiceRecognitionOptions = {}) =>
 
       if (finalTranscript) {
         setTranscript(finalTranscript);
-        onResult?.(finalTranscript);
+        onResultRef.current?.(finalTranscript);
       } else if (interimTranscript) {
         setTranscript(interimTranscript);
       }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      // Ignore "aborted" errors as they're expected when stopping
+      if (event.error === "aborted") {
+        return;
+      }
+      
+      // Ignore "no-speech" as it's common and not really an error
+      if (event.error === "no-speech") {
+        return;
+      }
+      
       console.error("Speech recognition error:", event.error);
+      isListeningRef.current = false;
       setIsListening(false);
-      onError?.(event.error);
+      onErrorRef.current?.(event.error);
     };
 
     recognitionRef.current = recognition;
 
     return () => {
-      recognition.abort();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {
+          // Ignore abort errors
+        }
+      }
     };
-  }, [continuous, language, onResult, onError]);
+  }, [continuous, language]); // Only recreate if these change
 
   const startListening = useCallback(() => {
-    if (recognitionRef.current && !isListening) {
+    if (recognitionRef.current && !isListeningRef.current) {
       setTranscript("");
       try {
-        recognitionRef.current.start();
+        // Small delay to ensure previous session is fully stopped
+        setTimeout(() => {
+          try {
+            recognitionRef.current?.start();
+          } catch (error) {
+            // If already started, ignore
+            if ((error as Error).message?.includes("already started")) {
+              return;
+            }
+            console.error("Failed to start recognition:", error);
+          }
+        }, 100);
       } catch (error) {
         console.error("Failed to start recognition:", error);
       }
     }
-  }, [isListening]);
+  }, []);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+    if (recognitionRef.current && isListeningRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        // Ignore stop errors
+      }
     }
-  }, [isListening]);
+  }, []);
 
   const toggleListening = useCallback(() => {
-    if (isListening) {
+    if (isListeningRef.current) {
       stopListening();
     } else {
       startListening();
     }
-  }, [isListening, startListening, stopListening]);
+  }, [startListening, stopListening]);
 
   return {
     isListening,

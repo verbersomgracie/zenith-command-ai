@@ -6,6 +6,14 @@ export interface VoiceCommand {
   description: string;
 }
 
+export const WAKE_WORDS = [
+  "jarvis",
+  "hey jarvis", 
+  "ei jarvis",
+  "oi jarvis",
+  "ok jarvis",
+];
+
 export const VOICE_COMMANDS: VoiceCommand[] = [
   {
     patterns: ["que horas são", "que hora é", "me diga as horas", "hora atual"],
@@ -53,7 +61,7 @@ export const VOICE_COMMANDS: VoiceCommand[] = [
     description: "Desativa a resposta por voz",
   },
   {
-    patterns: ["limpar histórico", "limpar conversa", "nova conversa", "resetar"],
+    patterns: ["limpar histórico", "limpar conversa", "nova conversa", "resetar conversa"],
     action: "CLEAR_MESSAGES",
     description: "Limpa o histórico de mensagens",
   },
@@ -77,6 +85,21 @@ export const VOICE_COMMANDS: VoiceCommand[] = [
     action: "GREETING",
     description: "Saudação",
   },
+  {
+    patterns: ["reinicializar", "reiniciar", "reiniciar sistema", "reboot", "restart"],
+    action: "RESTART_SYSTEM",
+    description: "Reinicializa a interface do JARVIS",
+  },
+  {
+    patterns: ["modo escuta", "escuta contínua", "sempre ouvindo", "ativar escuta"],
+    action: "ENABLE_WAKE_WORD",
+    description: "Ativa escuta contínua por palavra de ativação",
+  },
+  {
+    patterns: ["desativar escuta", "parar escuta", "desligar escuta"],
+    action: "DISABLE_WAKE_WORD",
+    description: "Desativa escuta contínua",
+  },
 ];
 
 interface UseVoiceCommandsOptions {
@@ -85,6 +108,11 @@ interface UseVoiceCommandsOptions {
 
 export const useVoiceCommands = (options: UseVoiceCommandsOptions = {}) => {
   const { onCommand } = options;
+
+  const detectWakeWord = useCallback((text: string): boolean => {
+    const normalizedText = text.toLowerCase().trim();
+    return WAKE_WORDS.some(wake => normalizedText.includes(wake));
+  }, []);
 
   const detectCommand = useCallback((text: string): VoiceCommand | null => {
     const normalizedText = text.toLowerCase().trim();
@@ -117,8 +145,10 @@ export const useVoiceCommands = (options: UseVoiceCommandsOptions = {}) => {
 
   return {
     detectCommand,
+    detectWakeWord,
     processVoiceInput,
     getCommandHelp,
     commands: VOICE_COMMANDS,
+    wakeWords: WAKE_WORDS,
   };
 };

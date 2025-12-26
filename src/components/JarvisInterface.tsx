@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceCommands } from "@/hooks/useVoiceCommands";
+import { useWakeWord } from "@/hooks/useWakeWord";
 import { useRealTimeData } from "@/hooks/useRealTimeData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import JarvisCore from "./JarvisCore";
@@ -32,9 +33,13 @@ const JarvisInterface = () => {
   const [isBooting, setIsBooting] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
+  const [isWakeWordListening, setIsWakeWordListening] = useState(false);
+  const [wakeWordDetected, setWakeWordDetected] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const wakeWordTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const isMobile = useIsMobile();
   
@@ -42,7 +47,7 @@ const JarvisInterface = () => {
   const realTimeData = useRealTimeData();
 
   // Voice commands hook
-  const { getCommandHelp } = useVoiceCommands();
+  const { getCommandHelp, detectWakeWord } = useVoiceCommands();
 
   // Fullscreen handlers
   const toggleFullscreen = useCallback(async () => {
@@ -140,6 +145,21 @@ const JarvisInterface = () => {
         const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
         return `${greeting}, Comandante. Como posso ajudá-lo?`;
       
+      case "RESTART_SYSTEM":
+        // Trigger reboot sequence
+        setIsBooting(true);
+        setMessages([]);
+        setTimeout(() => setIsBooting(false), 3000);
+        return "Reinicializando sistemas...";
+      
+      case "ENABLE_WAKE_WORD":
+        setWakeWordEnabled(true);
+        return "Escuta contínua ativada. Diga 'Jarvis' para me chamar.";
+      
+      case "DISABLE_WAKE_WORD":
+        setWakeWordEnabled(false);
+        return "Escuta contínua desativada.";
+      
       default:
         return null;
     }
@@ -184,10 +204,11 @@ const JarvisInterface = () => {
   }, [detectCommand, executeVoiceCommand, voiceEnabled]);
 
   // Voice recognition
-  const { isListening, transcript, isSupported, toggleListening } = useVoiceRecognition({
+  const { isListening, transcript, isSupported, toggleListening, startListening } = useVoiceRecognition({
     language: "pt-BR",
     onResult: async (text) => {
       setInput(text);
+      setWakeWordDetected(false);
       // Check for voice commands first
       const isCommand = await handleVoiceInput(text);
       if (!isCommand) {
@@ -203,6 +224,46 @@ const JarvisInterface = () => {
       });
     },
   });
+
+  // Wake word detection
+  const handleWakeWordDetected = useCallback(() => {
+    setWakeWordDetected(true);
+    // Play a subtle sound or visual feedback
+    toast({
+      title: "JARVIS ativado",
+      description: "Estou ouvindo, Comandante.",
+    });
+    // Start main voice recognition
+    startListening();
+    
+    // Auto-timeout after 10 seconds
+    if (wakeWordTimeoutRef.current) {
+      clearTimeout(wakeWordTimeoutRef.current);
+    }
+    wakeWordTimeoutRef.current = setTimeout(() => {
+      setWakeWordDetected(false);
+    }, 10000);
+  }, [startListening, toast]);
+
+  const { isListening: isWakeWordActive } = useWakeWord({
+    enabled: wakeWordEnabled && !isListening && !isSpeaking,
+    onWakeWordDetected: handleWakeWordDetected,
+    language: "pt-BR",
+  });
+
+  // Update wake word listening state
+  useEffect(() => {
+    setIsWakeWordListening(isWakeWordActive);
+  }, [isWakeWordActive]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (wakeWordTimeoutRef.current) {
+        clearTimeout(wakeWordTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const ensureAudioContext = () => {
     if (!audioCtxRef.current) {
@@ -537,7 +598,7 @@ const JarvisInterface = () => {
             </span>
           </div>
           <span className="text-[10px] text-muted-foreground hidden md:inline">
-            {isListening ? "VOZ ATIVA" : isSpeaking ? "REPRODUZINDO" : isProcessing ? "PROCESSANDO" : "AGUARDANDO"}
+            {isListening ? "VOZ ATIVA" : isWakeWordListening ? "AGUARDANDO 'JARVIS'" : isSpeaking ? "REPRODUZINDO" : isProcessing ? "PROCESSANDO" : "AGUARDANDO"}
           </span>
         </div>
 
@@ -550,6 +611,13 @@ const JarvisInterface = () => {
               {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
             </button>
           )}
+          <button
+            onClick={() => setWakeWordEnabled(!wakeWordEnabled)}
+            className={`p-2 rounded ${wakeWordEnabled ? "text-green-400 bg-green-400/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
+            title={wakeWordEnabled ? "Desativar escuta 'Jarvis'" : "Ativar escuta 'Jarvis'"}
+          >
+            <Radio className="w-4 h-4" />
+          </button>
           <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}
             className={`p-2 rounded ${voiceEnabled ? "text-primary bg-primary/10" : "text-muted-foreground"}`}

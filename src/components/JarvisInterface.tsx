@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
+import { useVoiceCommands } from "@/hooks/useVoiceCommands";
 import { useRealTimeData } from "@/hooks/useRealTimeData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import JarvisCore from "./JarvisCore";
@@ -40,6 +41,9 @@ const JarvisInterface = () => {
   // Real-time device data
   const realTimeData = useRealTimeData();
 
+  // Voice commands hook
+  const { getCommandHelp } = useVoiceCommands();
+
   // Fullscreen handlers
   const toggleFullscreen = useCallback(async () => {
     if (!document.fullscreenElement) {
@@ -68,12 +72,128 @@ const JarvisInterface = () => {
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
+  // Forward declarations for voice command handlers
+  const speakTextRef = useRef<(text: string) => Promise<void>>();
+  const stopSpeakingRef = useRef<() => void>();
+
+  // Voice command execution
+  const executeVoiceCommand = useCallback((action: string): string | null => {
+    const now = new Date();
+    
+    switch (action) {
+      case "GET_TIME":
+        return `São ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`;
+      
+      case "GET_DATE":
+        return `Hoje é ${now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}.`;
+      
+      case "GET_WEATHER":
+        if (realTimeData.weather.weather) {
+          const w = realTimeData.weather.weather;
+          return `A temperatura atual é de ${Math.round(w.temperature)}°C com ${w.description}. A umidade está em ${w.humidity}% e a sensação térmica é de ${Math.round(w.feelsLike)}°C.`;
+        }
+        return "Dados meteorológicos não disponíveis no momento.";
+      
+      case "GET_STATUS":
+        const cpuInfo = realTimeData.device.cpu;
+        const mem = realTimeData.device.memory;
+        const bat = realTimeData.device.battery;
+        return `Sistema operacional. CPU com ${cpuInfo.cores} núcleos a ${cpuInfo.usage}% de uso. ${mem.used}MB de ${mem.total}MB de memória em uso. Bateria em ${bat?.level ?? 0}%${bat?.charging ? ', carregando' : ''}.`;
+      
+      case "GET_BATTERY":
+        const battery = realTimeData.device.battery;
+        return `Bateria em ${battery?.level ?? 0}%${battery?.charging ? ', carregando' : ''}.`;
+      
+      case "STOP_SPEAKING":
+        stopSpeakingRef.current?.();
+        return null;
+      
+      case "TOGGLE_FULLSCREEN":
+        toggleFullscreen();
+        return isFullscreen ? "Saindo do modo tela cheia." : "Entrando em modo tela cheia.";
+      
+      case "ENABLE_VOICE":
+        setVoiceEnabled(true);
+        return "Resposta por voz ativada.";
+      
+      case "DISABLE_VOICE":
+        setVoiceEnabled(false);
+        return null;
+      
+      case "CLEAR_MESSAGES":
+        setMessages([]);
+        return "Histórico de conversa limpo.";
+      
+      case "OPEN_SIDEBAR":
+        setSidebarOpen(true);
+        return "Menu aberto.";
+      
+      case "CLOSE_SIDEBAR":
+        setSidebarOpen(false);
+        return "Menu fechado.";
+      
+      case "GET_HELP":
+        return `Comandos disponíveis:\n${getCommandHelp()}`;
+      
+      case "GREETING":
+        const hour = now.getHours();
+        const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+        return `${greeting}, Comandante. Como posso ajudá-lo?`;
+      
+      default:
+        return null;
+    }
+  }, [realTimeData, isFullscreen, toggleFullscreen, getCommandHelp]);
+
+  // Check for voice commands
+  const { detectCommand } = useVoiceCommands();
+
+  const handleVoiceInput = useCallback(async (text: string) => {
+    const command = detectCommand(text);
+    
+    if (command) {
+      // Add user message
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: text,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setInput("");
+
+      // Execute command
+      const response = executeVoiceCommand(command.action);
+      
+      if (response) {
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: response,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        
+        if (voiceEnabled) {
+          speakTextRef.current?.(response);
+        }
+      }
+      return true;
+    }
+    return false;
+  }, [detectCommand, executeVoiceCommand, voiceEnabled]);
+
   // Voice recognition
   const { isListening, transcript, isSupported, toggleListening } = useVoiceRecognition({
     language: "pt-BR",
-    onResult: (text) => {
+    onResult: async (text) => {
       setInput(text);
-      setTimeout(() => handleVoiceSubmit(text), 300);
+      // Check for voice commands first
+      const isCommand = await handleVoiceInput(text);
+      if (!isCommand) {
+        // If not a command, send to AI
+        setTimeout(() => handleVoiceSubmit(text), 300);
+      }
     },
     onError: (error) => {
       toast({
@@ -194,6 +314,12 @@ const JarvisInterface = () => {
       setIsSpeaking(false);
     }
   };
+
+  // Assign refs for voice commands
+  useEffect(() => {
+    speakTextRef.current = speakText;
+    stopSpeakingRef.current = stopSpeaking;
+  }, [voiceEnabled]);
 
   const streamChat = async (userMessages: { role: string; content: string }[]) => {
     const response = await fetch(

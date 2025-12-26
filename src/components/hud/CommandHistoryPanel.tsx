@@ -1,52 +1,47 @@
 import { motion } from "framer-motion";
-import { Terminal, ChevronRight } from "lucide-react";
+import { ChevronRight, Terminal } from "lucide-react";
 import HudPanel from "./HudPanel";
 
 interface Command {
   id: string;
   text: string;
-  timestamp: string;
+  time: string;
   status: "success" | "pending" | "error";
 }
 
 const commands: Command[] = [
-  { id: "1", text: "Sistema iniciado", timestamp: "08:00", status: "success" },
-  { id: "2", text: "Protocolo de segurança ativo", timestamp: "08:01", status: "success" },
-  { id: "3", text: "Scan de rede completo", timestamp: "08:15", status: "success" },
-  { id: "4", text: "Aguardando comandos...", timestamp: "agora", status: "pending" },
+  { id: "1", text: "Sistema iniciado", time: "08:00", status: "success" },
+  { id: "2", text: "Segurança ativa", time: "08:01", status: "success" },
+  { id: "3", text: "Scan completo", time: "08:15", status: "success" },
+  { id: "4", text: "Aguardando...", time: "agora", status: "pending" },
 ];
 
 const CommandHistoryPanel = () => {
   return (
-    <HudPanel title="Log de Comandos" delay={0.45} variant="bordered" className="w-56">
-      <div className="space-y-1.5 font-mono text-xs">
+    <HudPanel title="Log" delay={0.45} variant="bordered" compact>
+      <div className="space-y-1 font-mono text-[10px]">
         {commands.map((cmd, index) => (
           <motion.div
             key={cmd.id}
-            initial={{ opacity: 0, x: -10 }}
+            initial={{ opacity: 0, x: -5 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.5 + index * 0.1 }}
-            className="flex items-start gap-1.5"
+            transition={{ delay: 0.5 + index * 0.05 }}
+            className="flex items-center gap-1"
           >
-            <ChevronRight className={`w-3 h-3 mt-0.5 flex-shrink-0 ${
+            <ChevronRight className={`w-2.5 h-2.5 flex-shrink-0 ${
               cmd.status === "success" ? "text-green-400" :
-              cmd.status === "error" ? "text-red-400" :
-              "text-yellow-400 animate-pulse"
+              cmd.status === "error" ? "text-red-400" : "text-yellow-400 animate-pulse"
             }`} />
-            <div className="flex-1">
-              <span className="text-primary/60">[{cmd.timestamp}]</span>{" "}
-              <span className={cmd.status === "pending" ? "text-muted-foreground" : "text-foreground"}>
-                {cmd.text}
-              </span>
-            </div>
+            <span className="text-primary/50">{cmd.time}</span>
+            <span className={`truncate ${cmd.status === "pending" ? "text-muted-foreground" : "text-foreground"}`}>
+              {cmd.text}
+            </span>
           </motion.div>
         ))}
-      </div>
-      
-      {/* Blinking cursor */}
-      <div className="mt-2 flex items-center gap-1 text-primary">
-        <Terminal className="w-3 h-3" />
-        <span className="animate-pulse">_</span>
+        <div className="flex items-center gap-1 text-primary pt-1">
+          <Terminal className="w-2.5 h-2.5" />
+          <span className="animate-pulse">_</span>
+        </div>
       </div>
     </HudPanel>
   );

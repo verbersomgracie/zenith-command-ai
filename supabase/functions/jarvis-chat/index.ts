@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,19 +50,40 @@ You have access to the following tools that you MUST use when appropriate:
    - Trigger phrases: "enviar WhatsApp", "mandar WhatsApp", "mande WhatsApp", "envie WhatsApp", "WhatsApp para", "mensagem no WhatsApp", "manda no zap", "manda no wpp"
    - YOU MUST CALL THE FUNCTION with the phone number and message - DO NOT just say you sent it
    - If user provides a phone number and message, IMMEDIATELY call send_whatsapp_message
-   - Example: User says "enviar WhatsApp para 11999998888: Bom dia" -> CALL send_whatsapp_message(to: "11999998888", message: "Bom dia")
+   - If user provides a NAME instead of a number (e.g., "enviar WhatsApp para Mãe: Bom dia"), first call resolve_contact_by_name to get the phone number
+   - Example with number: User says "enviar WhatsApp para 11999998888: Bom dia" -> CALL send_whatsapp_message(to: "11999998888", message: "Bom dia")
+   - Example with name: User says "enviar WhatsApp para Mãe: Bom dia" -> FIRST call resolve_contact_by_name(name: "Mãe"), then use the returned phone number
 
-2. Task Management: create_task, list_tasks, complete_task
-3. Finance: add_expense, get_financial_summary  
-4. Habits: log_habit, get_habit_stats
-5. Reminders: create_reminder
-6. Analytics: get_daily_briefing
+2. CONTACT RESOLUTION (resolve_contact_by_name):
+   - Use this when user mentions a name instead of a phone number for WhatsApp
+   - Returns the phone number if found, or list of matches if multiple
+   - If no match found, inform user to add the contact first
+
+3. Task Management: create_task, list_tasks, complete_task
+4. Finance: add_expense, get_financial_summary  
+5. Habits: log_habit, get_habit_stats
+6. Reminders: create_reminder
+7. Analytics: get_daily_briefing
 
 CRITICAL RULE: When users request an action, you MUST call the appropriate function. NEVER just describe the action - EXECUTE IT by calling the tool.
 
 After performing an action, confirm completion concisely. No emojis. Ever.`;
 
 const tools = [
+  {
+    type: "function",
+    function: {
+      name: "resolve_contact_by_name",
+      description: "Look up a contact by name to get their phone number. Use this when user wants to send WhatsApp to a person by name instead of phone number.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "The name or partial name of the contact to search for" }
+        },
+        required: ["name"]
+      }
+    }
+  },
   {
     type: "function",
     function: {
@@ -193,11 +215,11 @@ const tools = [
     type: "function",
     function: {
       name: "send_whatsapp_message",
-      description: "Send a WhatsApp message via Twilio. Use when the user asks to send a WhatsApp message to someone.",
+      description: "Send a WhatsApp message via Twilio. Use when the user asks to send a WhatsApp message to someone. The 'to' parameter must be a phone number (not a name).",
       parameters: {
         type: "object",
         properties: {
-          to: { type: "string", description: "Recipient phone number in E.164 or Brazilian format (e.g., +5511999998888 or 11999998888)" },
+          to: { type: "string", description: "Recipient phone number in E.164 or Brazilian format (e.g., +5511999998888 or 11999998888). Must be a phone number, not a name." },
           message: { type: "string", description: "The message text to send via WhatsApp" }
         },
         required: ["to", "message"]
@@ -205,6 +227,71 @@ const tools = [
     }
   }
 ];
+
+// Helper to get Supabase client
+function getSupabaseClient() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase credentials not configured");
+  }
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+// Resolve contact by name from database
+async function resolveContactByName(name: string): Promise<string> {
+  try {
+    const supabase = getSupabaseClient();
+    const searchTerm = name.toLowerCase().trim();
+    
+    const { data: contacts, error } = await supabase
+      .from("contacts")
+      .select("name, phone_e164")
+      .ilike("name", `%${searchTerm}%`)
+      .limit(5);
+    
+    if (error) {
+      console.error("Error searching contacts:", error);
+      return JSON.stringify({
+        success: false,
+        message: "Erro ao buscar contatos no banco de dados."
+      });
+    }
+    
+    if (!contacts || contacts.length === 0) {
+      return JSON.stringify({
+        success: false,
+        message: `Nenhum contato encontrado com o nome "${name}". Peça ao usuário para adicionar o contato primeiro ou fornecer o número diretamente.`,
+        suggestions: ["Adicione o contato primeiro através do menu de Contatos", "Ou forneça o número de telefone diretamente"]
+      });
+    }
+    
+    if (contacts.length === 1) {
+      return JSON.stringify({
+        success: true,
+        contact: {
+          name: contacts[0].name,
+          phone: contacts[0].phone_e164
+        },
+        message: `Contato encontrado: ${contacts[0].name} - ${contacts[0].phone_e164}. Use este número para enviar a mensagem.`
+      });
+    }
+    
+    // Multiple matches
+    return JSON.stringify({
+      success: true,
+      multiple: true,
+      contacts: contacts.map(c => ({ name: c.name, phone: c.phone_e164 })),
+      message: `Encontrados ${contacts.length} contatos. Pergunte qual o usuário deseja: ${contacts.map(c => c.name).join(", ")}`
+    });
+  } catch (err) {
+    console.error("Error in resolveContactByName:", err);
+    return JSON.stringify({
+      success: false,
+      message: "Erro interno ao buscar contatos."
+    });
+  }
+}
 
 // Simulate function execution (in production, these would interact with the database)
 function executeFunctionCall(name: string, args: Record<string, unknown>): string {
@@ -296,6 +383,10 @@ function executeFunctionCall(name: string, args: Record<string, unknown>): strin
         message: "Good evening. You have 5 pending tasks (2 high priority). 2 of 5 habits completed today. Budget is on track with $752.50 remaining this month."
       });
     
+    case "resolve_contact_by_name":
+      // This will be handled separately with async
+      return "RESOLVE_CONTACT";
+    
     case "send_whatsapp_message":
       // This will call the jarvis-whatsapp-twilio edge function
       return "CALL_WHATSAPP_FUNCTION";
@@ -375,6 +466,19 @@ serve(async (req) => {
       const toolResults = await Promise.all(assistantMessage.tool_calls.map(async (toolCall: { id: string; function: { name: string; arguments: string } }) => {
         const args = JSON.parse(toolCall.function.arguments);
         let result = executeFunctionCall(toolCall.function.name, args);
+        
+        // Handle contact resolution
+        if (result === "RESOLVE_CONTACT") {
+          try {
+            result = await resolveContactByName(args.name);
+          } catch (error) {
+            console.error("Error resolving contact:", error);
+            result = JSON.stringify({
+              success: false,
+              message: `Erro ao buscar contato: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+            });
+          }
+        }
         
         // Handle WhatsApp function call
         if (result === "CALL_WHATSAPP_FUNCTION") {

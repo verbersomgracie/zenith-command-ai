@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceCommands } from "@/hooks/useVoiceCommands";
 import { useWakeWord } from "@/hooks/useWakeWord";
+import { useVoiceActivityDetection } from "@/hooks/useVoiceActivityDetection";
 import { useRealTimeData } from "@/hooks/useRealTimeData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import JarvisCore from "./JarvisCore";
@@ -36,6 +37,7 @@ const JarvisInterface = () => {
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
   const [isWakeWordListening, setIsWakeWordListening] = useState(false);
   const [wakeWordDetected, setWakeWordDetected] = useState(false);
+  const [vadEnabled, setVadEnabled] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -160,6 +162,14 @@ const JarvisInterface = () => {
         setWakeWordEnabled(false);
         return "Escuta contínua desativada.";
       
+      case "ENABLE_VAD":
+        setVadEnabled(true);
+        return "Detecção automática de voz ativada. Vou ouvir quando você falar.";
+      
+      case "DISABLE_VAD":
+        setVadEnabled(false);
+        return "Detecção automática de voz desativada.";
+      
       default:
         return null;
     }
@@ -255,6 +265,24 @@ const JarvisInterface = () => {
   useEffect(() => {
     setIsWakeWordListening(isWakeWordActive);
   }, [isWakeWordActive]);
+
+  // Voice Activity Detection - auto-start listening when voice detected
+  const handleVoiceStart = useCallback(() => {
+    if (!isListening && !isSpeaking && !isProcessing) {
+      toast({
+        title: "Voz detectada",
+        description: "Iniciando reconhecimento...",
+      });
+      startListening();
+    }
+  }, [isListening, isSpeaking, isProcessing, startListening, toast]);
+
+  const { isVoiceActive, audioLevel } = useVoiceActivityDetection({
+    enabled: vadEnabled && !isListening && !isSpeaking && !isProcessing,
+    threshold: 0.025,
+    silenceTimeout: 2000,
+    onVoiceStart: handleVoiceStart,
+  });
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -598,7 +626,7 @@ const JarvisInterface = () => {
             </span>
           </div>
           <span className="text-[10px] text-muted-foreground hidden md:inline">
-            {isListening ? "VOZ ATIVA" : isWakeWordListening ? "AGUARDANDO 'JARVIS'" : isSpeaking ? "REPRODUZINDO" : isProcessing ? "PROCESSANDO" : "AGUARDANDO"}
+            {isListening ? "VOZ ATIVA" : vadEnabled && isVoiceActive ? "SOM DETECTADO" : vadEnabled ? "VAD ATIVO" : isWakeWordListening ? "AGUARDANDO 'JARVIS'" : isSpeaking ? "REPRODUZINDO" : isProcessing ? "PROCESSANDO" : "AGUARDANDO"}
           </span>
         </div>
 
@@ -611,6 +639,13 @@ const JarvisInterface = () => {
               {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
             </button>
           )}
+          <button
+            onClick={() => setVadEnabled(!vadEnabled)}
+            className={`p-2 rounded ${vadEnabled ? "text-cyan-400 bg-cyan-400/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
+            title={vadEnabled ? "Desativar detecção automática" : "Ativar detecção automática de voz"}
+          >
+            <AudioWaveform className="w-4 h-4" />
+          </button>
           <button
             onClick={() => setWakeWordEnabled(!wakeWordEnabled)}
             className={`p-2 rounded ${wakeWordEnabled ? "text-green-400 bg-green-400/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}

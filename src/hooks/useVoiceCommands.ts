@@ -100,6 +100,16 @@ export const VOICE_COMMANDS: VoiceCommand[] = [
     action: "DISABLE_WAKE_WORD",
     description: "Desativa escuta contínua",
   },
+  {
+    patterns: ["modo automático", "detecção automática", "escuta automática", "ativar vad"],
+    action: "ENABLE_VAD",
+    description: "Ativa detecção automática de voz",
+  },
+  {
+    patterns: ["desativar automático", "desativar detecção", "desligar automático", "desativar vad"],
+    action: "DISABLE_VAD",
+    description: "Desativa detecção automática de voz",
+  },
 ];
 
 interface UseVoiceCommandsOptions {

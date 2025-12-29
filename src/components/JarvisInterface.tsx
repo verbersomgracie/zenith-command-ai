@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceCommands } from "@/hooks/useVoiceCommands";
@@ -8,6 +8,7 @@ import { useWakeWord } from "@/hooks/useWakeWord";
 import { useVoiceActivityDetection } from "@/hooks/useVoiceActivityDetection";
 import { useRealTimeData } from "@/hooks/useRealTimeData";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useContacts } from "@/hooks/useContacts";
 import JarvisCore from "./JarvisCore";
 import DateTimePanel from "./hud/DateTimePanel";
 import SystemStatusPanel from "./hud/SystemStatusPanel";
@@ -17,6 +18,8 @@ import QuickLinksPanel from "./hud/QuickLinksPanel";
 import NetworkInfoPanel from "./hud/NetworkInfoPanel";
 import CommandHistoryPanel from "./hud/CommandHistoryPanel";
 import BootSequence from "./BootSequence";
+import ContactsModal from "./contacts/ContactsModal";
+import ContactPickerPanel from "./contacts/ContactPickerPanel";
 
 interface Message {
   id: string;
@@ -38,12 +41,14 @@ const JarvisInterface = () => {
   const [isWakeWordListening, setIsWakeWordListening] = useState(false);
   const [wakeWordDetected, setWakeWordDetected] = useState(false);
   const [vadEnabled, setVadEnabled] = useState(false);
+  const [contactsModalOpen, setContactsModalOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const wakeWordTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { contacts, findContactByName } = useContacts();
   
   // Real-time device data
   const realTimeData = useRealTimeData();
@@ -586,6 +591,7 @@ const JarvisInterface = () => {
         loading={realTimeData.weather.loading}
         error={realTimeData.weather.error}
       />
+      <ContactPickerPanel onOpenContacts={() => setContactsModalOpen(true)} />
       <NotesPanel />
       <QuickLinksPanel />
       <CommandHistoryPanel />
@@ -809,6 +815,16 @@ const JarvisInterface = () => {
           transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
         />
       </div>
+
+      {/* Contacts Modal */}
+      <ContactsModal
+        isOpen={contactsModalOpen}
+        onClose={() => setContactsModalOpen(false)}
+        onSelectContact={(contact) => {
+          setInput(`Enviar WhatsApp para ${contact.name}: `);
+          inputRef.current?.focus();
+        }}
+      />
     </div>
   );
 };

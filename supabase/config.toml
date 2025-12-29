@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.jarvis-tts]
 verify_jwt = false
+
+[functions.jarvis-whatsapp-twilio]
+verify_jwt = false

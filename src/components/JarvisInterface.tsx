@@ -20,6 +20,8 @@ import CommandHistoryPanel from "./hud/CommandHistoryPanel";
 import BootSequence from "./BootSequence";
 import ContactsModal from "./contacts/ContactsModal";
 import ContactPickerPanel from "./contacts/ContactPickerPanel";
+import WhatsAppHistoryModal from "./whatsapp/WhatsAppHistoryModal";
+import WhatsAppPanel from "./whatsapp/WhatsAppPanel";
 
 interface Message {
   id: string;
@@ -42,6 +44,7 @@ const JarvisInterface = () => {
   const [wakeWordDetected, setWakeWordDetected] = useState(false);
   const [vadEnabled, setVadEnabled] = useState(false);
   const [contactsModalOpen, setContactsModalOpen] = useState(false);
+  const [whatsappHistoryOpen, setWhatsappHistoryOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -591,6 +594,7 @@ const JarvisInterface = () => {
         loading={realTimeData.weather.loading}
         error={realTimeData.weather.error}
       />
+      <WhatsAppPanel onOpenHistory={() => setWhatsappHistoryOpen(true)} />
       <ContactPickerPanel onOpenContacts={() => setContactsModalOpen(true)} />
       <NotesPanel />
       <QuickLinksPanel />
@@ -824,6 +828,12 @@ const JarvisInterface = () => {
           setInput(`Enviar WhatsApp para ${contact.name}: `);
           inputRef.current?.focus();
         }}
+      />
+
+      {/* WhatsApp History Modal */}
+      <WhatsAppHistoryModal
+        isOpen={whatsappHistoryOpen}
+        onClose={() => setWhatsappHistoryOpen(false)}
       />
     </div>
   );

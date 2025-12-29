@@ -2,31 +2,30 @@ import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { X, Upload, FileText, Loader2 } from "lucide-react";
 
-interface CsvImportModalProps {
+interface FileImportModalProps {
   onImport: (contacts: Array<{ name: string; tel: string[] }>) => Promise<{ imported: number; skipped: number }>;
   onClose: () => void;
 }
 
-export default function CsvImportModal({ onImport, onClose }: CsvImportModalProps) {
+export default function FileImportModal({ onImport, onClose }: FileImportModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [preview, setPreview] = useState<Array<{ name: string; tel: string[] }>>([]);
   const [error, setError] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const parseCSV = (text: string) => {
+  const parseCSV = (text: string): Array<{ name: string; tel: string[] }> => {
     const lines = text.split(/\r?\n/).filter(line => line.trim());
     
     if (lines.length === 0) {
       throw new Error("Arquivo CSV vazio");
     }
 
-    // Try to detect the header
     const firstLine = lines[0].toLowerCase();
     let nameIndex = 0;
     let phoneIndex = 1;
     let startLine = 0;
 
-    // Check if first line is a header
     if (firstLine.includes("nome") || firstLine.includes("name") || 
         firstLine.includes("telefone") || firstLine.includes("phone") || 
         firstLine.includes("tel")) {
@@ -43,7 +42,6 @@ export default function CsvImportModal({ onImport, onClose }: CsvImportModalProp
     
     for (let i = startLine; i < lines.length; i++) {
       const line = lines[i];
-      // Split by comma, semicolon, or tab
       const parts = line.split(/[,;\t]/).map(p => p.trim().replace(/^["']|["']$/g, ''));
       
       const name = parts[nameIndex] || "";
@@ -57,16 +55,94 @@ export default function CsvImportModal({ onImport, onClose }: CsvImportModalProp
     return contacts;
   };
 
+  const parseVCF = (text: string): Array<{ name: string; tel: string[] }> => {
+    const contacts: Array<{ name: string; tel: string[] }> = [];
+    
+    // Split by vCard entries
+    const vcards = text.split(/(?=BEGIN:VCARD)/i).filter(card => card.trim());
+    
+    for (const vcard of vcards) {
+      const lines = vcard.split(/\r?\n/);
+      let name = "";
+      const phones: string[] = [];
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        // Parse FN (Formatted Name) - preferred
+        if (trimmedLine.toUpperCase().startsWith("FN:") || trimmedLine.toUpperCase().startsWith("FN;")) {
+          const fnValue = trimmedLine.replace(/^FN[;:][^:]*:/i, "").replace(/^FN:/i, "").trim();
+          if (fnValue && !name) {
+            name = fnValue;
+          }
+        }
+        
+        // Parse N (Name structure) as fallback
+        if (trimmedLine.toUpperCase().startsWith("N:") || trimmedLine.toUpperCase().startsWith("N;")) {
+          const nValue = trimmedLine.replace(/^N[;:][^:]*:/i, "").replace(/^N:/i, "").trim();
+          if (nValue && !name) {
+            // N format is: Last;First;Middle;Prefix;Suffix
+            const nameParts = nValue.split(";").filter(p => p.trim());
+            if (nameParts.length >= 2) {
+              name = `${nameParts[1]} ${nameParts[0]}`.trim();
+            } else if (nameParts.length === 1) {
+              name = nameParts[0].trim();
+            }
+          }
+        }
+        
+        // Parse TEL (phone numbers)
+        if (trimmedLine.toUpperCase().startsWith("TEL:") || trimmedLine.toUpperCase().startsWith("TEL;")) {
+          // Handle various TEL formats:
+          // TEL:+55123456789
+          // TEL;TYPE=CELL:+55123456789
+          // TEL;VALUE=uri:tel:+55123456789
+          let phoneValue = trimmedLine;
+          
+          // Remove TEL prefix and type info
+          phoneValue = phoneValue.replace(/^TEL[;:][^:]*:/i, "").replace(/^TEL:/i, "");
+          // Remove tel: URI prefix if present
+          phoneValue = phoneValue.replace(/^tel:/i, "");
+          // Clean up the number
+          phoneValue = phoneValue.trim();
+          
+          if (phoneValue) {
+            phones.push(phoneValue);
+          }
+        }
+      }
+      
+      if (name && phones.length > 0) {
+        contacts.push({ name, tel: phones });
+      }
+    }
+    
+    if (contacts.length === 0) {
+      throw new Error("Nenhum contato válido encontrado no arquivo VCF");
+    }
+    
+    return contacts;
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setError(null);
     setIsProcessing(true);
+    setFileName(file.name);
 
     try {
       const text = await file.text();
-      const contacts = parseCSV(text);
+      const extension = file.name.toLowerCase().split('.').pop();
+      
+      let contacts: Array<{ name: string; tel: string[] }>;
+      
+      if (extension === 'vcf' || extension === 'vcard' || text.includes('BEGIN:VCARD')) {
+        contacts = parseVCF(text);
+      } else {
+        contacts = parseCSV(text);
+      }
       
       if (contacts.length === 0) {
         throw new Error("Nenhum contato válido encontrado no arquivo");
@@ -95,6 +171,9 @@ export default function CsvImportModal({ onImport, onClose }: CsvImportModalProp
     }
   };
 
+  // Count total phone numbers
+  const totalPhones = preview.reduce((acc, c) => acc + c.tel.length, 0);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -108,7 +187,7 @@ export default function CsvImportModal({ onImport, onClose }: CsvImportModalProp
         className="bg-card border border-primary/30 rounded-lg w-full max-w-md p-4 max-h-[80vh] overflow-hidden flex flex-col"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display text-primary">IMPORTAR CSV</h3>
+          <h3 className="font-display text-primary">IMPORTAR ARQUIVO</h3>
           <button onClick={onClose} className="p-1 hover:bg-primary/10 rounded">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
@@ -120,7 +199,7 @@ export default function CsvImportModal({ onImport, onClose }: CsvImportModalProp
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.txt"
+              accept=".csv,.txt,.vcf,.vcard"
               onChange={handleFileSelect}
               className="hidden"
             />
@@ -134,12 +213,12 @@ export default function CsvImportModal({ onImport, onClose }: CsvImportModalProp
               ) : (
                 <>
                   <Upload className="w-6 h-6" />
-                  <span>Selecionar arquivo CSV</span>
+                  <span>Selecionar arquivo CSV ou VCF</span>
                 </>
               )}
             </button>
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              Formato: Nome, Telefone (separado por vírgula, ponto-e-vírgula ou tab)
+              Suporta: CSV, VCF (vCard) — exportado do Google, iPhone, Android, etc.
             </p>
           </div>
 
@@ -155,18 +234,21 @@ export default function CsvImportModal({ onImport, onClose }: CsvImportModalProp
             <div className="flex-1 overflow-hidden flex flex-col">
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                 <FileText className="w-4 h-4" />
-                <span>{preview.length} contatos encontrados</span>
+                <span>{preview.length} contatos ({totalPhones} telefones)</span>
+                {fileName && <span className="text-xs opacity-70">— {fileName}</span>}
               </div>
               <div className="flex-1 overflow-y-auto border border-primary/20 rounded p-2 space-y-1">
-                {preview.slice(0, 10).map((c, i) => (
-                  <div key={i} className="flex justify-between text-xs">
-                    <span className="text-foreground truncate">{c.name}</span>
-                    <span className="text-muted-foreground">{c.tel[0]}</span>
+                {preview.slice(0, 15).map((c, i) => (
+                  <div key={i} className="flex justify-between text-xs gap-2">
+                    <span className="text-foreground truncate flex-1">{c.name}</span>
+                    <span className="text-muted-foreground whitespace-nowrap">
+                      {c.tel[0]}{c.tel.length > 1 && ` (+${c.tel.length - 1})`}
+                    </span>
                   </div>
                 ))}
-                {preview.length > 10 && (
+                {preview.length > 15 && (
                   <div className="text-xs text-muted-foreground text-center pt-2">
-                    ... e mais {preview.length - 10} contatos
+                    ... e mais {preview.length - 15} contatos
                   </div>
                 )}
               </div>

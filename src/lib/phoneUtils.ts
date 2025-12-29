@@ -2,6 +2,24 @@
  * Phone number utilities for E.164 normalization
  */
 
+// Type definitions for Contact Picker API
+interface ContactInfo {
+  name?: string[];
+  tel?: string[];
+  email?: string[];
+}
+
+interface ContactsManager {
+  select(properties: string[], options?: { multiple?: boolean }): Promise<ContactInfo[]>;
+  getProperties(): Promise<string[]>;
+}
+
+declare global {
+  interface Navigator {
+    contacts?: ContactsManager;
+  }
+}
+
 /**
  * Normalize a phone number to E.164 format (digits only)
  * Default country code is Brazil (55)
@@ -67,24 +85,36 @@ export function formatPhoneForDisplay(e164: string): string {
 
 /**
  * Check if Contact Picker API is supported
+ * Only works on Android Chrome - not supported on iOS/Safari or desktop browsers
  */
 export function isContactPickerSupported(): boolean {
-  return 'contacts' in navigator && 'select' in (navigator as any).contacts;
+  return typeof navigator !== 'undefined' && 
+         'contacts' in navigator && 
+         navigator.contacts !== undefined &&
+         'select' in navigator.contacts;
 }
 
 /**
  * Pick contacts from device using Contact Picker API
+ * Only works on Android Chrome
  */
 export async function pickContactsFromDevice(): Promise<Array<{ name: string; tel: string[] }>> {
   if (!isContactPickerSupported()) {
-    throw new Error("Contact Picker API not supported on this device/browser");
+    throw new Error("A importação de contatos do telefone só funciona no Chrome para Android. Use 'Adicionar Manual' ou 'Importar CSV'.");
   }
   
-  const nav = navigator as any;
-  const contacts = await nav.contacts.select(['name', 'tel'], { multiple: true });
-  
-  return contacts.map((contact: any) => ({
-    name: contact.name?.[0] || "Unknown",
-    tel: contact.tel || [],
-  }));
+  try {
+    const contacts = await navigator.contacts!.select(['name', 'tel'], { multiple: true });
+    
+    return contacts.map((contact) => ({
+      name: contact.name?.[0] || "Sem nome",
+      tel: contact.tel || [],
+    }));
+  } catch (err) {
+    // User cancelled or permission denied
+    if (err instanceof Error && err.name === 'NotAllowedError') {
+      throw new Error("Permissão negada. Permita o acesso aos contatos nas configurações do navegador.");
+    }
+    throw err;
+  }
 }

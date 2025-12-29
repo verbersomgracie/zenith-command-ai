@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, UserPlus, Smartphone, FileText, Search, MessageCircle, Pencil, Trash2, Loader2 } from "lucide-react";
+import { X, UserPlus, Smartphone, FileUp, Search, MessageCircle, Pencil, Trash2, Loader2 } from "lucide-react";
 import { useContacts, Contact } from "@/hooks/useContacts";
 import { isContactPickerSupported, pickContactsFromDevice, formatPhoneForDisplay } from "@/lib/phoneUtils";
 import { useToast } from "@/hooks/use-toast";
 import ContactForm from "./ContactForm";
-import CsvImportModal from "./CsvImportModal";
+import FileImportModal from "./FileImportModal";
 
 interface ContactsModalProps {
   isOpen: boolean;
@@ -19,7 +19,7 @@ export default function ContactsModal({ isOpen, onClose, onSelectContact }: Cont
   
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [showCsvImport, setShowCsvImport] = useState(false);
+  const [showFileImport, setShowFileImport] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -135,11 +135,11 @@ export default function ContactsModal({ isOpen, onClose, onSelectContact }: Cont
               Adicionar Manual
             </button>
             <button
-              onClick={() => setShowCsvImport(true)}
+              onClick={() => setShowFileImport(true)}
               className="flex items-center gap-2 px-3 py-2 bg-primary/10 border border-primary/30 rounded text-sm text-primary hover:bg-primary/20"
             >
-              <FileText className="w-4 h-4" />
-              Importar CSV
+              <FileUp className="w-4 h-4" />
+              Importar Arquivo
             </button>
           </div>
 
@@ -216,11 +216,11 @@ export default function ContactsModal({ isOpen, onClose, onSelectContact }: Cont
             />
           )}
 
-          {/* CSV Import Modal */}
-          {showCsvImport && (
-            <CsvImportModal
+          {/* File Import Modal (CSV/VCF) */}
+          {showFileImport && (
+            <FileImportModal
               onImport={importContacts}
-              onClose={() => setShowCsvImport(false)}
+              onClose={() => setShowFileImport(false)}
             />
           )}
         </motion.div>

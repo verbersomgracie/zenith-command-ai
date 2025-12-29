@@ -6,11 +6,13 @@ interface JarvisCoreProps {
   isSpeaking: boolean;
   isListening: boolean;
   isProcessing: boolean;
+  wakeWordDetected?: boolean;
 }
 
-const JarvisCore = ({ analyser, isSpeaking, isListening, isProcessing }: JarvisCoreProps) => {
+const JarvisCore = ({ analyser, isSpeaking, isListening, isProcessing, wakeWordDetected = false }: JarvisCoreProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
+  const wakeWordPulseRef = useRef(0);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -151,8 +153,57 @@ const JarvisCore = ({ analyser, isSpeaking, isListening, isProcessing }: JarvisC
       ctx.stroke();
     }
 
+    // Wake word detection pulse - dramatic expanding rings
+    if (wakeWordDetected || wakeWordPulseRef.current > 0) {
+      if (wakeWordDetected && wakeWordPulseRef.current === 0) {
+        wakeWordPulseRef.current = 1;
+      }
+      
+      if (wakeWordPulseRef.current > 0) {
+        const pulseProgress = wakeWordPulseRef.current;
+        const numRings = 4;
+        
+        for (let ring = 0; ring < numRings; ring++) {
+          const ringDelay = ring * 0.15;
+          const ringProgress = Math.max(0, Math.min(1, (pulseProgress - ringDelay) * 1.5));
+          
+          if (ringProgress > 0) {
+            const expandRadius = 40 + ringProgress * 120;
+            const alpha = (1 - ringProgress) * 0.8;
+            const lineWidth = (1 - ringProgress) * 4 + 1;
+            
+            // Cyan glow ring
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, expandRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = `hsla(187, 100%, 60%, ${alpha})`;
+            ctx.lineWidth = lineWidth;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = "hsla(187, 100%, 50%, 0.8)";
+            ctx.stroke();
+            
+            // Inner bright ring
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, expandRadius - 2, 0, Math.PI * 2);
+            ctx.strokeStyle = `hsla(187, 100%, 80%, ${alpha * 0.5})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+        
+        ctx.shadowBlur = 0;
+        
+        // Advance pulse animation
+        wakeWordPulseRef.current += 0.02;
+        if (wakeWordPulseRef.current > 1.5) {
+          wakeWordPulseRef.current = wakeWordDetected ? 0.01 : 0;
+        }
+      }
+    } else {
+      wakeWordPulseRef.current = 0;
+    }
+
     animationRef.current = requestAnimationFrame(draw);
-  }, [analyser, isSpeaking, isListening, isProcessing]);
+  }, [analyser, isSpeaking, isListening, isProcessing, wakeWordDetected]);
 
   useEffect(() => {
     animationRef.current = requestAnimationFrame(draw);

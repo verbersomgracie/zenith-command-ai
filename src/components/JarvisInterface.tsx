@@ -672,6 +672,7 @@ const JarvisInterface = () => {
               isSpeaking={isSpeaking}
               isListening={isListening}
               isProcessing={isProcessing}
+              wakeWordDetected={wakeWordDetected}
             />
           </div>
 

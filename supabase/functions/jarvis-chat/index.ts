@@ -179,6 +179,21 @@ const tools = [
         properties: {}
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_whatsapp_message",
+      description: "Send a WhatsApp message via Twilio. Use when the user asks to send a WhatsApp message to someone.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient phone number in E.164 or Brazilian format (e.g., +5511999998888 or 11999998888)" },
+          message: { type: "string", description: "The message text to send via WhatsApp" }
+        },
+        required: ["to", "message"]
+      }
+    }
   }
 ];
 
@@ -272,6 +287,10 @@ function executeFunctionCall(name: string, args: Record<string, unknown>): strin
         message: "Good evening. You have 5 pending tasks (2 high priority). 2 of 5 habits completed today. Budget is on track with $752.50 remaining this month."
       });
     
+    case "send_whatsapp_message":
+      // This will call the jarvis-whatsapp-twilio edge function
+      return "CALL_WHATSAPP_FUNCTION";
+    
     default:
       return JSON.stringify({ success: false, message: "Unknown function" });
   }
@@ -344,15 +363,59 @@ serve(async (req) => {
       console.log("Processing tool calls:", assistantMessage.tool_calls.length);
       
       // Execute each tool call
-      const toolResults = assistantMessage.tool_calls.map((toolCall: { id: string; function: { name: string; arguments: string } }) => {
+      const toolResults = await Promise.all(assistantMessage.tool_calls.map(async (toolCall: { id: string; function: { name: string; arguments: string } }) => {
         const args = JSON.parse(toolCall.function.arguments);
-        const result = executeFunctionCall(toolCall.function.name, args);
+        let result = executeFunctionCall(toolCall.function.name, args);
+        
+        // Handle WhatsApp function call
+        if (result === "CALL_WHATSAPP_FUNCTION") {
+          try {
+            const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+            const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+            
+            const whatsappResponse = await fetch(`${SUPABASE_URL}/functions/v1/jarvis-whatsapp-twilio`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+              },
+              body: JSON.stringify({
+                to: args.to,
+                message: args.message,
+              }),
+            });
+            
+            const whatsappData = await whatsappResponse.json();
+            console.log("WhatsApp function response:", whatsappData);
+            
+            if (whatsappData.ok) {
+              result = JSON.stringify({
+                success: true,
+                message: `Mensagem enviada com sucesso para ${args.to}. SID: ${whatsappData.sid}`
+              });
+            } else {
+              result = JSON.stringify({
+                success: false,
+                message: whatsappData.error,
+                details: whatsappData.details,
+                sandboxInstructions: whatsappData.sandboxInstructions
+              });
+            }
+          } catch (error) {
+            console.error("Error calling WhatsApp function:", error);
+            result = JSON.stringify({
+              success: false,
+              message: `Erro ao enviar WhatsApp: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+            });
+          }
+        }
+        
         return {
           role: "tool",
           tool_call_id: toolCall.id,
           content: result,
         };
-      });
+      }));
 
       // Make a second call with the tool results
       const followUpResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

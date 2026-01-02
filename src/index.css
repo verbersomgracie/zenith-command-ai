@@ -73,6 +73,22 @@
     --input: 222 30% 15%;
     --ring: 187 100% 50%;
   }
+
+  /* Red Mode Theme */
+  .red-mode {
+    --primary: 0 85% 55%;
+    --primary-foreground: 0 0% 98%;
+    --accent: 0 75% 45%;
+    --accent-foreground: 0 0% 98%;
+    --ring: 0 85% 55%;
+    --border: 0 50% 25%;
+    --glow-primary: 0 85% 55%;
+    --glow-secondary: 15 100% 60%;
+    --glass-border: 0 50% 30%;
+    --sidebar-primary: 0 85% 55%;
+    --sidebar-border: 0 50% 20%;
+    --sidebar-ring: 0 85% 55%;
+  }
 }
 
 @layer base {

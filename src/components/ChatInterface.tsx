@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, Sparkles, User, Bot, Volume2, VolumeX } from "lucide-react";
+import { Send, Mic, Sparkles, User, Bot, Volume2, VolumeX, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import AudioWaveform from "./AudioWaveform";
@@ -12,24 +12,17 @@ interface Message {
   timestamp: Date;
 }
 
-const initialMessages: Message[] = [
-  {
-    id: "1",
-    role: "assistant",
-    content: "Boa noite, Comandante. Sou JARVIS, seu assistente de inteligência artificial. Estou pronto para auxiliá-lo. Como posso servi-lo?",
-    timestamp: new Date(),
-  },
-];
-
 const ChatInterface = () => {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  const hasLoadedRef = useRef(false);
 
   // WebAudio refs (Jarvis effect + waveform base)
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -43,6 +36,86 @@ const ChatInterface = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load conversation history from database
+  const loadConversationHistory = useCallback(async () => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+
+    try {
+      const { data, error } = await supabase
+        .from("conversation_history")
+        .select("*")
+        .order("created_at", { ascending: true })
+        .limit(50); // Last 50 messages for context
+
+      if (error) {
+        console.error("Error loading conversation history:", error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const loadedMessages: Message[] = data.map((msg) => ({
+          id: msg.id,
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+        }));
+        setMessages(loadedMessages);
+      }
+    } catch (err) {
+      console.error("Failed to load conversation history:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Save message to database
+  const saveMessage = async (role: "user" | "assistant", content: string) => {
+    try {
+      const { error } = await supabase
+        .from("conversation_history")
+        .insert({ role, content });
+
+      if (error) {
+        console.error("Error saving message:", error);
+      }
+    } catch (err) {
+      console.error("Failed to save message:", err);
+    }
+  };
+
+  // Clear conversation history
+  const clearHistory = async () => {
+    try {
+      const { error } = await supabase
+        .from("conversation_history")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000"); // Delete all
+
+      if (error) {
+        console.error("Error clearing history:", error);
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Falha ao limpar histórico",
+        });
+        return;
+      }
+
+      setMessages([]);
+      toast({
+        title: "Histórico limpo",
+        description: "Memória de conversas apagada",
+      });
+    } catch (err) {
+      console.error("Failed to clear history:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadConversationHistory();
+  }, [loadConversationHistory]);
 
   const ensureAudioContext = () => {
     if (!audioCtxRef.current) {
@@ -215,6 +288,9 @@ const ChatInterface = () => {
     setInput("");
     setIsTyping(true);
 
+    // Save user message to database
+    await saveMessage("user", input);
+
     // Build message history for context
     const messageHistory = [...messages, userMessage].map((m) => ({
       role: m.role,
@@ -313,6 +389,11 @@ const ChatInterface = () => {
         }
       }
       
+      // Save assistant response to database
+      if (assistantContent) {
+        await saveMessage("assistant", assistantContent);
+      }
+
       // Speak the response if voice is enabled
       if (assistantContent && voiceEnabled) {
         speakText(assistantContent);
@@ -356,6 +437,13 @@ const ChatInterface = () => {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={clearHistory}
+            className="p-2 rounded-lg bg-secondary text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
+            title="Limpar histórico"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => {
               if (isSpeaking) {
                 stopSpeaking();
@@ -385,6 +473,19 @@ const ChatInterface = () => {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-thin">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+            Inicie uma conversa com JARVIS
+          </div>
+        ) : null}
         <AnimatePresence>
           {messages.map((message, index) => (
             <motion.div

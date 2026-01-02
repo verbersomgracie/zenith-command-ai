@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizePhoneNumber } from "@/lib/phoneUtils";
 import { useToast } from "@/hooks/use-toast";
-
+import { useAuditLog } from "@/hooks/useAuditLog";
 export interface Contact {
   id: string;
   name: string;
@@ -18,6 +18,7 @@ export function useContacts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { logContactAccess } = useAuditLog();
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -32,6 +33,9 @@ export function useContacts() {
       if (fetchError) throw fetchError;
       
       setContacts(data || []);
+      
+      // Log view access
+      logContactAccess('view', undefined, { count: data?.length || 0 });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch contacts";
       setError(message);
@@ -91,6 +95,10 @@ export function useContacts() {
         title: "Contato adicionado",
         description: `${name} foi adicionado com sucesso.`,
       });
+      
+      // Log create action
+      logContactAccess('create', data.id, { name: data.name });
+      
       return data;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to add contact";
@@ -142,6 +150,10 @@ export function useContacts() {
         title: "Contato atualizado",
         description: `${name} foi atualizado com sucesso.`,
       });
+      
+      // Log update action
+      logContactAccess('update', id, { name });
+      
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update contact";
@@ -163,6 +175,9 @@ export function useContacts() {
         .eq("id", id);
       
       if (error) throw error;
+      
+      // Log delete action before removing from state
+      logContactAccess('delete', id);
       
       setContacts(prev => prev.filter(c => c.id !== id));
       toast({
@@ -244,6 +259,9 @@ export function useContacts() {
       title: "Importação concluída",
       description: `${imported} contatos importados, ${skipped} ignorados.`,
     });
+    
+    // Log import action
+    logContactAccess('import', undefined, { imported, skipped });
     
     return { imported, skipped };
   }, [fetchContacts, toast]);

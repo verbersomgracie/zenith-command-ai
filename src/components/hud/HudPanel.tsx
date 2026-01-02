@@ -8,6 +8,7 @@ interface HudPanelProps {
   delay?: number;
   variant?: "default" | "minimal" | "bordered";
   compact?: boolean;
+  action?: ReactNode;
 }
 
 const HudPanel = ({ 
@@ -16,7 +17,8 @@ const HudPanel = ({
   className = "", 
   delay = 0, 
   variant = "default",
-  compact = false 
+  compact = false,
+  action
 }: HudPanelProps) => {
   return (
     <motion.div
@@ -43,9 +45,12 @@ const HudPanel = ({
         ${compact ? "p-2" : "p-3"} h-full
       `}>
         {title && (
-          <h3 className="font-display text-[10px] text-primary/80 uppercase tracking-wider mb-2 border-b border-primary/20 pb-1">
-            {title}
-          </h3>
+          <div className="flex items-center justify-between mb-2 border-b border-primary/20 pb-1">
+            <h3 className="font-display text-[10px] text-primary/80 uppercase tracking-wider">
+              {title}
+            </h3>
+            {action}
+          </div>
         )}
         {children}
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Power, MessageSquare, Send, Wrench } from 'lucide-react';
+import { Mic, MicOff, MessageSquare, Send, Wrench, VolumeX, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -31,7 +31,9 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [isExecutingTool, setIsExecutingTool] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const agentRef = useRef<RealtimeAgent | null>(null);
+  const hasStartedRef = useRef(false);
   
   // Audio analyser for JarvisCore visualization
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
@@ -146,6 +148,23 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
     }
   }, [textInput, handleError]);
 
+  // Toggle mute
+  const toggleMute = useCallback(() => {
+    if (agentRef.current) {
+      const newMuteState = !isMuted;
+      agentRef.current.setMuted(newMuteState);
+      setIsMuted(newMuteState);
+    }
+  }, [isMuted]);
+
+  // Auto-start on mount
+  useEffect(() => {
+    if (!hasStartedRef.current) {
+      hasStartedRef.current = true;
+      startAgent();
+    }
+  }, [startAgent]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -245,25 +264,47 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
 
       {/* Control Buttons */}
       <div className="flex items-center justify-center gap-3 mb-4">
-        {state === 'idle' || state === 'error' ? (
+        {state === 'connecting' ? (
+          <Button
+            disabled
+            size="lg"
+            className="gap-2 px-6"
+          >
+            <motion.div
+              className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            />
+            Conectando...
+          </Button>
+        ) : state === 'error' ? (
           <Button
             onClick={startAgent}
             size="lg"
-            className="gap-2 bg-primary hover:bg-primary/90 px-6"
+            className="gap-2 bg-destructive hover:bg-destructive/90 px-6"
           >
-            <Power className="w-5 h-5" />
-            Iniciar
+            <Mic className="w-5 h-5" />
+            Reconectar
           </Button>
         ) : (
           <>
             <Button
-              onClick={stopAgent}
-              variant="destructive"
+              onClick={toggleMute}
+              variant={isMuted ? "destructive" : "outline"}
               size="lg"
               className="gap-2"
             >
-              <MicOff className="w-5 h-5" />
-              Parar
+              {isMuted ? (
+                <>
+                  <VolumeX className="w-5 h-5" />
+                  Microfone Mudo
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-5 h-5" />
+                  Microfone Ativo
+                </>
+              )}
             </Button>
 
             <Button

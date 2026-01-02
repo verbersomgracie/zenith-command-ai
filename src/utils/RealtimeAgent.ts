@@ -396,4 +396,13 @@ export class RealtimeAgent {
   isConnected(): boolean {
     return this.pc?.connectionState === 'connected';
   }
+
+  setMuted(muted: boolean) {
+    if (this.localStream) {
+      this.localStream.getAudioTracks().forEach(track => {
+        track.enabled = !muted;
+      });
+      console.log('[RealtimeAgent] Muted:', muted);
+    }
+  }
 }

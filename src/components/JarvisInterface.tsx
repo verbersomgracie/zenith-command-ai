@@ -51,6 +51,11 @@ const JarvisInterface = () => {
   const [whatsappHistoryOpen, setWhatsappHistoryOpen] = useState(false);
   const [routinesModalOpen, setRoutinesModalOpen] = useState(false);
   const [redMode, setRedMode] = useState(false);
+  
+  // Cooldown state to prevent listening while JARVIS is preparing to speak or speaking
+  const [speakingCooldown, setSpeakingCooldown] = useState(false);
+  const cooldownTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -276,12 +281,15 @@ const JarvisInterface = () => {
     }, 10000);
   }, [startListening, toast, vibrate]);
 
+  // Combined blocking state: block listening when speaking, processing, or in cooldown
+  const isBlocked = isSpeaking || isProcessing || speakingCooldown;
+
   const { 
     isListening: isWakeWordActive, 
     listeningDuration,
     resumeListening: resumeWakeWordListening 
   } = useBackgroundWakeWord({
-    enabled: wakeWordEnabled && !isListening && !isSpeaking,
+    enabled: wakeWordEnabled && !isListening && !isBlocked,
     onWakeWordDetected: handleWakeWordDetected,
     language: "pt-BR",
   });
@@ -291,30 +299,43 @@ const JarvisInterface = () => {
     setIsWakeWordListening(isWakeWordActive);
   }, [isWakeWordActive]);
 
-  // Resume wake word listening after voice recognition ends
+  // Resume wake word listening after voice recognition ends AND cooldown is over
   useEffect(() => {
-    if (wakeWordEnabled && !isListening && !isSpeaking) {
-      resumeWakeWordListening();
+    if (wakeWordEnabled && !isListening && !isBlocked) {
+      // Add small delay before resuming to ensure audio has fully stopped
+      const resumeTimer = setTimeout(() => {
+        resumeWakeWordListening();
+      }, 500);
+      return () => clearTimeout(resumeTimer);
     }
-  }, [wakeWordEnabled, isListening, isSpeaking, resumeWakeWordListening]);
+  }, [wakeWordEnabled, isListening, isBlocked, resumeWakeWordListening]);
 
   // Voice Activity Detection - auto-start listening when voice detected
   const handleVoiceStart = useCallback(() => {
-    if (!isListening && !isSpeaking && !isProcessing) {
+    if (!isListening && !isBlocked) {
       toast({
         title: "Voz detectada",
         description: "Iniciando reconhecimento...",
       });
       startListening();
     }
-  }, [isListening, isSpeaking, isProcessing, startListening, toast]);
+  }, [isListening, isBlocked, startListening, toast]);
 
   const { isVoiceActive, audioLevel } = useVoiceActivityDetection({
-    enabled: vadEnabled && !isListening && !isSpeaking && !isProcessing,
+    enabled: vadEnabled && !isListening && !isBlocked,
     threshold: 0.025,
     silenceTimeout: 2000,
     onVoiceStart: handleVoiceStart,
   });
+
+  // Cleanup cooldown timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownTimeoutRef.current) {
+        clearTimeout(cooldownTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -386,6 +407,12 @@ const JarvisInterface = () => {
     if (!voiceEnabled || isSpeakingRef.current) return;
     isSpeakingRef.current = true;
     
+    // Start cooldown immediately to block wake word/VAD during TTS fetch
+    setSpeakingCooldown(true);
+    if (cooldownTimeoutRef.current) {
+      clearTimeout(cooldownTimeoutRef.current);
+    }
+    
     try {
       setIsSpeaking(true);
       const response = await fetch(
@@ -422,17 +449,24 @@ const JarvisInterface = () => {
         setIsSpeaking(false);
         isSpeakingRef.current = false;
         URL.revokeObjectURL(audioUrl);
+        
+        // Add cooldown period after speech ends before allowing listening again
+        cooldownTimeoutRef.current = setTimeout(() => {
+          setSpeakingCooldown(false);
+        }, 1500); // 1.5 second cooldown after speaking
       };
       audio.onerror = () => {
         setIsSpeaking(false);
         isSpeakingRef.current = false;
         URL.revokeObjectURL(audioUrl);
+        setSpeakingCooldown(false);
       };
       await audio.play();
     } catch (error) {
       console.error("TTS error:", error);
       setIsSpeaking(false);
       isSpeakingRef.current = false;
+      setSpeakingCooldown(false);
     }
   };
 
@@ -442,6 +476,12 @@ const JarvisInterface = () => {
       audioRef.current.currentTime = 0;
       setIsSpeaking(false);
       isSpeakingRef.current = false;
+      
+      // Clear cooldown when manually stopped
+      if (cooldownTimeoutRef.current) {
+        clearTimeout(cooldownTimeoutRef.current);
+      }
+      setSpeakingCooldown(false);
     }
   };
 

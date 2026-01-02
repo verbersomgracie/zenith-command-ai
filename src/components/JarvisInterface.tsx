@@ -156,7 +156,7 @@ const JarvisInterface = () => {
       case "GREETING":
         const hour = now.getHours();
         const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
-        return `${greeting}, Comandante. Como posso ajudá-lo?`;
+        return `${greeting}, Senhor. Em que posso ser útil?`;
       
       case "RESTART_SYSTEM":
         // Trigger reboot sequence
@@ -556,30 +556,30 @@ const JarvisInterface = () => {
       
       if (hour >= 5 && hour < 12) {
         const morningVariants = [
-          "Bom dia, Comandante! Pronto pra começar o dia com tudo?",
-          "E aí, bom dia! Dormiu bem? Vamos nessa!",
-          "Bom dia! O café já tomou? Estou aqui pra ajudar no que precisar.",
+          "Bom dia, Senhor. Confio que tenha descansado adequadamente. Todos os sistemas estão operacionais.",
+          "Bom dia, Senhor. Espero que a noite tenha sido reparadora. À sua disposição.",
+          "Bom dia, Senhor. Os sistemas da Stark Industries aguardam suas instruções.",
         ];
         greetingText = morningVariants[Math.floor(Math.random() * morningVariants.length)];
       } else if (hour >= 12 && hour < 18) {
         const afternoonVariants = [
-          "Boa tarde, Comandante! Como está sendo o dia?",
-          "E aí, boa tarde! Tudo tranquilo por aí?",
-          "Opa, boa tarde! No que posso te ajudar?",
+          "Boa tarde, Senhor. Como posso ser útil neste momento?",
+          "Boa tarde, Senhor. Sistemas em pleno funcionamento. Aguardando suas ordens.",
+          "Boa tarde, Senhor. Há algo em que possa auxiliá-lo?",
         ];
         greetingText = afternoonVariants[Math.floor(Math.random() * afternoonVariants.length)];
       } else if (hour >= 18 && hour < 22) {
         const eveningVariants = [
-          "Boa noite, Comandante! Como foi o dia?",
-          "E aí, boa noite! Relaxando um pouco?",
-          "Boa noite! Estou por aqui se precisar de algo.",
+          "Boa noite, Senhor. Espero que o dia tenha sido produtivo. Em que posso ajudar?",
+          "Boa noite, Senhor. Os sistemas continuam operacionais. Às suas ordens.",
+          "Boa noite, Senhor. Pronto para auxiliá-lo no que for necessário.",
         ];
         greetingText = eveningVariants[Math.floor(Math.random() * eveningVariants.length)];
       } else {
         const nightVariants = [
-          "Opa, ainda acordado? Posso ajudar em algo?",
-          "E aí, Comandante! Queimando a madrugada, hein?",
-          "Fala, chefe! Noite longa hoje?",
+          "Boa noite, Senhor. Trabalhando até tarde novamente, se me permite observar.",
+          "Senhor, devo mencionar que são horas avançadas. Posso ajudar em algo?",
+          "Ainda acordado, Senhor? Estou à disposição, como sempre.",
         ];
         greetingText = nightVariants[Math.floor(Math.random() * nightVariants.length)];
       }

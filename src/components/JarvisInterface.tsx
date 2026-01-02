@@ -545,9 +545,11 @@ const JarvisInterface = () => {
     if (transcript) setInput(transcript);
   }, [transcript]);
 
-  // Initial greeting
+  // Initial greeting - use ref to prevent double execution in StrictMode
+  const hasGreetedRef = useRef(false);
   useEffect(() => {
-    if (isBooting) return;
+    if (isBooting || hasGreetedRef.current) return;
+    hasGreetedRef.current = true;
     const timer = setTimeout(() => {
       const greeting: Message = {
         id: "initial",

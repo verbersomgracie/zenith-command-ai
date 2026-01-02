@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame, Headphones } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceCommands } from "@/hooks/useVoiceCommands";
-import { useWakeWord } from "@/hooks/useWakeWord";
+import { useBackgroundWakeWord } from "@/hooks/useBackgroundWakeWord";
 import { useVoiceActivityDetection } from "@/hooks/useVoiceActivityDetection";
 import { useRealTimeData } from "@/hooks/useRealTimeData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useContacts } from "@/hooks/useContacts";
+import { useCapacitor } from "@/hooks/useCapacitor";
 import JarvisCore from "./JarvisCore";
 import DateTimePanel from "./hud/DateTimePanel";
 import SystemStatusPanel from "./hud/SystemStatusPanel";
@@ -55,6 +56,7 @@ const JarvisInterface = () => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const { contacts, findContactByName } = useContacts();
+  const { isNative, platform, vibrate } = useCapacitor();
   
   // Real-time device data
   const realTimeData = useRealTimeData();
@@ -246,14 +248,19 @@ const JarvisInterface = () => {
     },
   });
 
-  // Wake word detection
+  // Wake word detection with background support
   const handleWakeWordDetected = useCallback(() => {
     setWakeWordDetected(true);
-    // Play a subtle sound or visual feedback
+    
+    // Haptic feedback
+    vibrate([100, 50, 100]);
+    
+    // Visual/audio feedback
     toast({
-      title: "JARVIS ativado",
+      title: "🎤 JARVIS ativado",
       description: "Estou ouvindo, Comandante.",
     });
+    
     // Start main voice recognition
     startListening();
     
@@ -264,9 +271,13 @@ const JarvisInterface = () => {
     wakeWordTimeoutRef.current = setTimeout(() => {
       setWakeWordDetected(false);
     }, 10000);
-  }, [startListening, toast]);
+  }, [startListening, toast, vibrate]);
 
-  const { isListening: isWakeWordActive } = useWakeWord({
+  const { 
+    isListening: isWakeWordActive, 
+    listeningDuration,
+    resumeListening: resumeWakeWordListening 
+  } = useBackgroundWakeWord({
     enabled: wakeWordEnabled && !isListening && !isSpeaking,
     onWakeWordDetected: handleWakeWordDetected,
     language: "pt-BR",
@@ -276,6 +287,13 @@ const JarvisInterface = () => {
   useEffect(() => {
     setIsWakeWordListening(isWakeWordActive);
   }, [isWakeWordActive]);
+
+  // Resume wake word listening after voice recognition ends
+  useEffect(() => {
+    if (wakeWordEnabled && !isListening && !isSpeaking) {
+      resumeWakeWordListening();
+    }
+  }, [wakeWordEnabled, isListening, isSpeaking, resumeWakeWordListening]);
 
   // Voice Activity Detection - auto-start listening when voice detected
   const handleVoiceStart = useCallback(() => {
@@ -683,8 +701,14 @@ const JarvisInterface = () => {
             </span>
           </div>
           <span className="text-[10px] text-muted-foreground hidden md:inline">
-            {isListening ? "VOZ ATIVA" : vadEnabled && isVoiceActive ? "SOM DETECTADO" : vadEnabled ? "VAD ATIVO" : isWakeWordListening ? "AGUARDANDO 'JARVIS'" : isSpeaking ? "REPRODUZINDO" : isProcessing ? "PROCESSANDO" : "AGUARDANDO"}
+            {isListening ? "VOZ ATIVA" : vadEnabled && isVoiceActive ? "SOM DETECTADO" : vadEnabled ? "VAD ATIVO" : isWakeWordListening ? `🎧 'HEY JARVIS' ${listeningDuration > 0 ? `(${Math.floor(listeningDuration / 60)}:${(listeningDuration % 60).toString().padStart(2, '0')})` : ''}` : isSpeaking ? "REPRODUZINDO" : isProcessing ? "PROCESSANDO" : "AGUARDANDO"}
           </span>
+          {/* Mobile wake word status */}
+          {isMobile && isWakeWordListening && (
+            <span className="text-[10px] text-green-400 animate-pulse">
+              🎧 OUVINDO
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1 md:gap-2">
@@ -705,10 +729,13 @@ const JarvisInterface = () => {
           </button>
           <button
             onClick={() => setWakeWordEnabled(!wakeWordEnabled)}
-            className={`p-2 rounded ${wakeWordEnabled ? "text-green-400 bg-green-400/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
-            title={wakeWordEnabled ? "Desativar escuta 'Jarvis'" : "Ativar escuta 'Jarvis'"}
+            className={`p-2 rounded relative ${wakeWordEnabled ? "text-green-400 bg-green-400/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
+            title={wakeWordEnabled ? "Desativar escuta 'Hey Jarvis'" : "Ativar escuta 'Hey Jarvis' em segundo plano"}
           >
-            <Radio className="w-4 h-4" />
+            <Headphones className="w-4 h-4" />
+            {wakeWordEnabled && isWakeWordListening && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            )}
           </button>
           <button
             onClick={() => setRedMode(!redMode)}

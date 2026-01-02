@@ -41,6 +41,27 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_history: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+        }
+        Relationships: []
+      }
       daily_routines: {
         Row: {
           category: string

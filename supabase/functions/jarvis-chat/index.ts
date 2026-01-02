@@ -415,6 +415,32 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Load previous conversation history for memory context
+    let historyContext = "";
+    try {
+      const supabase = getSupabaseClient();
+      const { data: history, error } = await supabase
+        .from("conversation_history")
+        .select("role, content, created_at")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      
+      if (!error && history && history.length > 0) {
+        // Reverse to get chronological order (oldest first)
+        const reversedHistory = history.reverse();
+        // Only use history older than the current session messages
+        const lastHistoryTime = new Date(reversedHistory[reversedHistory.length - 1].created_at);
+        historyContext = `\n\nCONTEXTO DE CONVERSAS ANTERIORES (memória de longo prazo):
+${reversedHistory.map(h => `[${new Date(h.created_at).toLocaleString("pt-BR")}] ${h.role === "user" ? "Usuário" : "JARVIS"}: ${h.content}`).join("\n")}
+
+Use este histórico para lembrar de conversas passadas, preferências do usuário, e manter continuidade. Faça referências naturais quando relevante.`;
+        console.log("Loaded conversation history:", history.length, "messages");
+      }
+    } catch (historyError) {
+      console.error("Error loading conversation history:", historyError);
+      // Continue without history - non-critical
+    }
+
     console.log("Calling Lovable AI with messages:", messages.length);
 
     // First call - may include tool calls
@@ -427,7 +453,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: SYSTEM_PROMPT + historyContext },
           ...messages,
         ],
         tools: tools,

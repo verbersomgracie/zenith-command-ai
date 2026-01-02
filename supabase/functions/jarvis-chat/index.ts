@@ -63,11 +63,19 @@ You have access to the following tools that you MUST use when appropriate:
    - Returns the phone number if found, or list of matches if multiple
    - If no match found, inform user to add the contact first
 
-3. Task Management: create_task, list_tasks, complete_task
-4. Finance: add_expense, get_financial_summary  
-5. Habits: log_habit, get_habit_stats
-6. Reminders: create_reminder
-7. Analytics: get_daily_briefing
+3. WEB SEARCH (web_search) - IMPORTANT:
+   - Use this when user asks about current information, news, facts, prices, or anything that needs up-to-date web data
+   - Trigger phrases: "pesquisar", "buscar", "procurar", "notícias sobre", "qual o preço", "cotação", "o que está acontecendo", "me fale sobre", "pesquise sobre", "buscar na internet", "google"
+   - ALWAYS use this for: news, current events, prices, stock values, weather details, product information, facts you're unsure about
+   - Example: User asks "qual a cotação do dólar hoje" -> CALL web_search(query: "cotação dólar hoje Brasil")
+   - Example: User asks "notícias sobre IA" -> CALL web_search(query: "últimas notícias inteligência artificial")
+
+4. Task Management: create_task, list_tasks, complete_task
+5. Finance: add_expense, get_financial_summary  
+6. Habits: log_habit, get_habit_stats
+7. Reminders: create_reminder
+8. Analytics: get_daily_briefing
+9. Routines: create_routine, list_routines, complete_routine, delete_routine, update_routine
 
 CRITICAL RULE: When users request an action, you MUST call the appropriate function. NEVER just describe the action - EXECUTE IT by calling the tool.
 
@@ -327,6 +335,21 @@ const tools = [
         required: ["routine_title"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description: "Search the internet for current information. Use when user asks about news, current events, weather, prices, facts, or any information that may need up-to-date data from the web. Examples: 'pesquisar na internet', 'buscar no Google', 'qual a cotação do dólar', 'notícias sobre', 'o que está acontecendo', 'pesquise sobre', 'me fale sobre [topic atual]'.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The search query to look up on the internet" },
+          context: { type: "string", description: "Optional additional context about what kind of information is needed" }
+        },
+        required: ["query"]
+      }
+    }
   }
 ];
 
@@ -555,6 +578,9 @@ function executeFunctionCall(name: string, args: Record<string, unknown>): strin
     
     case "update_routine":
       return "UPDATE_ROUTINE";
+    
+    case "web_search":
+      return "WEB_SEARCH";
     
     default:
       return JSON.stringify({ success: false, message: "Função não reconhecida, Senhor. Poderia reformular o pedido?" });
@@ -1048,6 +1074,137 @@ Use este histórico para lembrar de conversas passadas, preferências do usuári
             result = JSON.stringify({
               success: false,
               message: `Erro ao atualizar rotina: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+            });
+          }
+        }
+        
+        // Handle web search using OpenAI
+        if (result === "WEB_SEARCH") {
+          try {
+            const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+            
+            if (!OPENAI_API_KEY) {
+              result = JSON.stringify({
+                success: false,
+                message: "Chave da API OpenAI não configurada, Senhor. Não consigo realizar buscas na internet no momento."
+              });
+            } else {
+              console.log("Performing web search with OpenAI:", args.query);
+              
+              // Use OpenAI's GPT-4o with web search capability
+              const searchResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${OPENAI_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  model: "gpt-4o",
+                  messages: [
+                    {
+                      role: "system",
+                      content: `Você é um assistente de pesquisa. Sua tarefa é fornecer informações atualizadas e precisas baseadas na web.
+                      
+Quando responder:
+- Forneça informações factuais e atualizadas
+- Cite fontes quando possível
+- Seja conciso mas completo
+- Se a informação pode estar desatualizada, mencione isso
+- Formato: responda em português brasileiro
+
+Contexto adicional: ${args.context || "Nenhum"}`
+                    },
+                    {
+                      role: "user",
+                      content: `Pesquisar na internet: ${args.query}`
+                    }
+                  ],
+                  max_tokens: 1000,
+                  web_search_options: {
+                    search_context_size: "medium"
+                  }
+                }),
+              });
+              
+              if (!searchResponse.ok) {
+                const errorText = await searchResponse.text();
+                console.error("OpenAI search error:", searchResponse.status, errorText);
+                
+                // Fallback to regular GPT-4o without web search
+                console.log("Falling back to regular GPT-4o response");
+                const fallbackResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${OPENAI_API_KEY}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    model: "gpt-4o",
+                    messages: [
+                      {
+                        role: "system",
+                        content: `Você é um assistente de pesquisa inteligente. Forneça a melhor informação possível baseada no seu conhecimento.
+                        
+Quando responder:
+- Forneça informações factuais
+- Mencione que seu conhecimento pode ter uma data de corte
+- Seja conciso mas completo
+- Formato: responda em português brasileiro`
+                      },
+                      {
+                        role: "user",
+                        content: `${args.query}`
+                      }
+                    ],
+                    max_tokens: 1000,
+                  }),
+                });
+                
+                if (fallbackResponse.ok) {
+                  const fallbackData = await fallbackResponse.json();
+                  const content = fallbackData.choices?.[0]?.message?.content || "Não foi possível obter resposta";
+                  
+                  result = JSON.stringify({
+                    success: true,
+                    query: args.query,
+                    search_result: content,
+                    source: "knowledge_base",
+                    message: `Busca realizada com base no conhecimento do sistema. Nota: dados podem não estar 100% atualizados.`
+                  });
+                } else {
+                  result = JSON.stringify({
+                    success: false,
+                    message: "Erro ao realizar busca na internet, Senhor. Tente novamente em instantes."
+                  });
+                }
+              } else {
+                const searchData = await searchResponse.json();
+                console.log("OpenAI search response received");
+                
+                const content = searchData.choices?.[0]?.message?.content || "Não foi possível obter resultados";
+                const annotations = searchData.choices?.[0]?.message?.annotations || [];
+                
+                // Extract URLs from annotations if available
+                const sources = annotations
+                  .filter((a: { type: string }) => a.type === "url_citation")
+                  .map((a: { url: string; title?: string }) => ({ url: a.url, title: a.title || "Fonte" }))
+                  .slice(0, 5);
+                
+                result = JSON.stringify({
+                  success: true,
+                  query: args.query,
+                  search_result: content,
+                  sources: sources,
+                  source: "web_search",
+                  message: `Busca na internet concluída com sucesso.`
+                });
+              }
+            }
+          } catch (error) {
+            console.error("Error in web_search:", error);
+            result = JSON.stringify({
+              success: false,
+              message: `Erro ao buscar na internet: ${error instanceof Error ? error.message : "Erro desconhecido"}`
             });
           }
         }

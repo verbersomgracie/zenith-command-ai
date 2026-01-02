@@ -1,11 +1,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Power, MessageSquare, Volume2 } from 'lucide-react';
+import { Mic, MicOff, Power, MessageSquare, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeAgent, AgentState } from '@/utils/RealtimeAgent';
+import JarvisCore from './JarvisCore';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -28,6 +29,10 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const agentRef = useRef<RealtimeAgent | null>(null);
+  
+  // Audio analyser for JarvisCore visualization
+  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Update parent when state changes
   useEffect(() => {
@@ -57,10 +62,20 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
       title: 'JARVIS Online',
       description: 'Conexão de áudio estabelecida. Pode falar.',
     });
+    
+    // Set up audio analyser for visualization
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+      const newAnalyser = audioContextRef.current.createAnalyser();
+      newAnalyser.fftSize = 1024;
+      newAnalyser.smoothingTimeConstant = 0.85;
+      setAnalyser(newAnalyser);
+    }
   }, [toast]);
 
   const handleDisconnected = useCallback(() => {
     console.log('[JarvisAudioAgent] Disconnected');
+    setAnalyser(null);
   }, []);
 
   const startAgent = useCallback(async () => {
@@ -117,6 +132,9 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
   useEffect(() => {
     return () => {
       agentRef.current?.disconnect();
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
     };
   }, []);
 
@@ -128,156 +146,84 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
       case 'thinking': return 'Processando';
       case 'speaking': return 'Falando';
       case 'error': return 'Erro';
-      default: return 'Desconhecido';
-    }
-  };
-
-  const getStateColor = () => {
-    switch (state) {
-      case 'idle': return 'text-muted-foreground';
-      case 'connecting': return 'text-yellow-500';
-      case 'listening': return 'text-cyan-400';
-      case 'thinking': return 'text-purple-400';
-      case 'speaking': return 'text-primary';
-      case 'error': return 'text-destructive';
-      default: return 'text-muted-foreground';
+      default: return 'Online';
     }
   };
 
   const isActive = state !== 'idle' && state !== 'error';
 
   return (
-    <div className={`flex flex-col gap-4 ${className}`}>
-      {/* Status Display */}
-      <div className="flex items-center justify-center gap-2">
-        <motion.div
-          className={`w-3 h-3 rounded-full ${
-            state === 'idle' ? 'bg-muted-foreground' :
-            state === 'connecting' ? 'bg-yellow-500' :
-            state === 'listening' ? 'bg-cyan-400' :
-            state === 'thinking' ? 'bg-purple-400' :
-            state === 'speaking' ? 'bg-primary' :
-            'bg-destructive'
-          }`}
-          animate={{
-            scale: isActive ? [1, 1.2, 1] : 1,
-            opacity: state === 'connecting' ? [1, 0.5, 1] : 1,
-          }}
-          transition={{
-            duration: state === 'speaking' ? 0.5 : 1,
-            repeat: isActive ? Infinity : 0,
-            ease: 'easeInOut',
-          }}
+    <div className={`flex flex-col items-center ${className}`}>
+      {/* JARVIS Core Visualization */}
+      <div className="relative mb-6">
+        <JarvisCore
+          analyser={analyser}
+          isSpeaking={state === 'speaking'}
+          isListening={state === 'listening'}
+          isProcessing={state === 'thinking' || state === 'connecting'}
+          wakeWordDetected={false}
         />
-        <span className={`text-sm font-mono uppercase tracking-wider ${getStateColor()}`}>
-          {getStateLabel()}
-        </span>
-      </div>
-
-      {/* Visual Indicator */}
-      <div className="relative flex items-center justify-center h-24">
-        <AnimatePresence mode="wait">
-          {state === 'speaking' && (
-            <motion.div
-              key="speaking"
-              className="flex items-center gap-1"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-            >
-              {[...Array(5)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  className="w-1 bg-primary rounded-full"
-                  animate={{
-                    height: [8, 32, 8],
-                  }}
-                  transition={{
-                    duration: 0.5,
-                    repeat: Infinity,
-                    delay: i * 0.1,
-                    ease: 'easeInOut',
-                  }}
-                />
-              ))}
-            </motion.div>
-          )}
-
-          {state === 'listening' && (
-            <motion.div
-              key="listening"
-              className="relative"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <motion.div
-                className="w-16 h-16 rounded-full border-2 border-cyan-400"
-                animate={{
-                  scale: [1, 1.2, 1],
-                  opacity: [0.8, 0.4, 0.8],
-                }}
-                transition={{
-                  duration: 1.5,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                }}
-              />
-              <Mic className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-cyan-400" />
-            </motion.div>
-          )}
-
-          {state === 'thinking' && (
-            <motion.div
-              key="thinking"
-              className="flex items-center gap-2"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              {[...Array(3)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  className="w-3 h-3 bg-purple-400 rounded-full"
-                  animate={{
-                    y: [-4, 4, -4],
-                    opacity: [0.5, 1, 0.5],
-                  }}
-                  transition={{
-                    duration: 0.6,
-                    repeat: Infinity,
-                    delay: i * 0.15,
-                  }}
-                />
-              ))}
-            </motion.div>
-          )}
-
+        
+        {/* Connecting overlay */}
+        <AnimatePresence>
           {state === 'connecting' && (
             <motion.div
-              key="connecting"
-              className="w-12 h-12 border-2 border-yellow-500 border-t-transparent rounded-full"
-              animate={{ rotate: 360 }}
-              transition={{
-                duration: 1,
-                repeat: Infinity,
-                ease: 'linear',
-              }}
-            />
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex items-center justify-center"
+            >
+              <motion.div
+                className="w-16 h-16 border-2 border-yellow-500 border-t-transparent rounded-full"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              />
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
 
+      {/* Status Label */}
+      <motion.div
+        className="text-center mb-6"
+        animate={{ opacity: state === 'connecting' ? 0.5 : 1 }}
+      >
+        <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+          {getStateLabel()}
+        </p>
+      </motion.div>
+
+      {/* Last Message Display */}
+      <AnimatePresence mode="wait">
+        {messages.length > 0 && (
+          <motion.div
+            key={messages[messages.length - 1]?.content.slice(0, 20)}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="max-w-md text-center mb-6 px-4"
+          >
+            <p className={`text-sm md:text-base leading-relaxed ${
+              messages[messages.length - 1]?.role === 'assistant' 
+                ? 'text-foreground' 
+                : 'text-muted-foreground italic'
+            }`}>
+              {messages[messages.length - 1]?.content}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Control Buttons */}
-      <div className="flex items-center justify-center gap-3">
+      <div className="flex items-center justify-center gap-3 mb-4">
         {state === 'idle' || state === 'error' ? (
           <Button
             onClick={startAgent}
             size="lg"
-            className="gap-2 bg-primary hover:bg-primary/90"
+            className="gap-2 bg-primary hover:bg-primary/90 px-6"
           >
             <Power className="w-5 h-5" />
-            Iniciar JARVIS
+            Iniciar
           </Button>
         ) : (
           <>
@@ -295,7 +241,7 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
               onClick={() => setShowTextInput(!showTextInput)}
               variant="outline"
               size="icon"
-              className="w-12 h-12"
+              className="w-12 h-12 border-primary/30"
             >
               <MessageSquare className="w-5 h-5" />
             </Button>
@@ -310,44 +256,38 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="flex gap-2"
+            className="w-full max-w-md px-4"
           >
-            <Input
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              placeholder="Digite uma mensagem..."
-              onKeyDown={(e) => e.key === 'Enter' && sendTextMessage()}
-              className="flex-1"
-            />
-            <Button onClick={sendTextMessage} disabled={!textInput.trim()}>
-              Enviar
-            </Button>
+            <div className="bg-card/60 backdrop-blur-sm border border-primary/30 rounded-lg p-2 flex items-center gap-2">
+              <Input
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder="Digite uma mensagem..."
+                onKeyDown={(e) => e.key === 'Enter' && sendTextMessage()}
+                className="flex-1 bg-transparent border-none"
+              />
+              <Button 
+                onClick={sendTextMessage} 
+                disabled={!textInput.trim()}
+                size="icon"
+                className="rounded-full bg-primary/20 border border-primary/50"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Recent Messages */}
-      {messages.length > 0 && (
-        <div className="max-h-40 overflow-y-auto space-y-2 text-sm">
-          {messages.slice(-5).map((msg, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, x: msg.role === 'user' ? 20 : -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[80%] px-3 py-1.5 rounded-lg ${
-                  msg.role === 'user'
-                    ? 'bg-primary/20 text-primary-foreground'
-                    : 'bg-muted text-foreground'
-                }`}
-              >
-                {msg.content}
-              </div>
-            </motion.div>
-          ))}
-        </div>
+      {/* Instruction text */}
+      {isActive && (
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center text-xs text-muted-foreground mt-4 px-4"
+        >
+          Fale naturalmente. Interrompa a qualquer momento.
+        </motion.p>
       )}
     </div>
   );

@@ -229,6 +229,32 @@ const tools = [
         required: ["to", "message"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_routine",
+      description: "Create a new daily routine. Use when the user asks to add, create, or schedule a daily routine/habit. Examples: 'adicionar rotina', 'criar rotina de tomar remédio', 'nova rotina às 8h', 'adicionar tomar vitamina às 7:30'.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "The routine title (e.g., 'Tomar remédio', 'Exercício matinal', 'Leitura')" },
+          scheduled_time: { type: "string", description: "Time in HH:MM format (24h). E.g., '07:30', '14:00', '22:30'. Required." },
+          days_of_week: { 
+            type: "array", 
+            items: { type: "number" },
+            description: "Days of the week (0=Sunday, 1=Monday, ..., 6=Saturday). Default to all days [0,1,2,3,4,5,6] if not specified." 
+          },
+          category: { 
+            type: "string", 
+            enum: ["health", "fitness", "morning", "study", "wellness", "general"], 
+            description: "Routine category. health=medicine/vitamins, fitness=exercise, morning=morning rituals, study=learning, wellness=self-care, general=other" 
+          },
+          description: { type: "string", description: "Optional description or notes" }
+        },
+        required: ["title", "scheduled_time"]
+      }
+    }
   }
 ];
 
@@ -443,6 +469,9 @@ function executeFunctionCall(name: string, args: Record<string, unknown>): strin
     case "send_whatsapp_message":
       return "CALL_WHATSAPP_FUNCTION";
     
+    case "create_routine":
+      return "CREATE_ROUTINE";
+    
     default:
       return JSON.stringify({ success: false, message: "Função não reconhecida, Senhor. Poderia reformular o pedido?" });
   }
@@ -597,6 +626,61 @@ Use este histórico para lembrar de conversas passadas, preferências do usuári
             result = JSON.stringify({
               success: false,
               message: `Erro ao enviar WhatsApp: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+            });
+          }
+        }
+        
+        // Handle routine creation
+        if (result === "CREATE_ROUTINE") {
+          try {
+            const supabase = getSupabaseClient();
+            
+            // Default days to all week if not provided
+            const daysOfWeek = args.days_of_week || [0, 1, 2, 3, 4, 5, 6];
+            const category = args.category || "general";
+            
+            const { data: routineData, error: routineError } = await supabase
+              .from("daily_routines")
+              .insert({
+                title: args.title,
+                scheduled_time: args.scheduled_time,
+                days_of_week: daysOfWeek,
+                category: category,
+                description: args.description || null,
+                is_active: true,
+              })
+              .select()
+              .single();
+            
+            if (routineError) {
+              console.error("Error creating routine:", routineError);
+              result = JSON.stringify({
+                success: false,
+                message: `Erro ao criar rotina: ${routineError.message}`
+              });
+            } else {
+              const daysNames = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+              const daysText = daysOfWeek.length === 7 
+                ? "todos os dias" 
+                : daysOfWeek.map((d: number) => daysNames[d]).join(", ");
+              
+              const createRoutineResponses = [
+                `Rotina "${args.title}" criada com êxito para as ${args.scheduled_time}, ${daysText}. Providenciarei lembretes oportunos, Senhor.`,
+                `Certamente, Senhor. "${args.title}" foi adicionada às ${args.scheduled_time}. Manterei o acompanhamento ${daysText}.`,
+                `Rotina registrada: "${args.title}" às ${args.scheduled_time}, ${daysText}. Estarei monitorando o progresso, Senhor.`,
+              ];
+              
+              result = JSON.stringify({
+                success: true,
+                routine: routineData,
+                message: getRandomVariant(createRoutineResponses)
+              });
+            }
+          } catch (error) {
+            console.error("Error in create_routine:", error);
+            result = JSON.stringify({
+              success: false,
+              message: `Erro ao criar rotina: ${error instanceof Error ? error.message : "Erro desconhecido"}`
             });
           }
         }

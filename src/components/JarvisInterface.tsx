@@ -13,7 +13,7 @@ import JarvisCore from "./JarvisCore";
 import DateTimePanel from "./hud/DateTimePanel";
 import SystemStatusPanel from "./hud/SystemStatusPanel";
 import WeatherPanel from "./hud/WeatherPanel";
-import NotesPanel from "./hud/NotesPanel";
+import RoutinesPanel from "./hud/RoutinesPanel";
 import QuickLinksPanel from "./hud/QuickLinksPanel";
 import NetworkInfoPanel from "./hud/NetworkInfoPanel";
 import CommandHistoryPanel from "./hud/CommandHistoryPanel";
@@ -22,6 +22,7 @@ import ContactsModal from "./contacts/ContactsModal";
 import ContactPickerPanel from "./contacts/ContactPickerPanel";
 import WhatsAppHistoryModal from "./whatsapp/WhatsAppHistoryModal";
 import WhatsAppPanel from "./whatsapp/WhatsAppPanel";
+import RoutinesModal from "./routines/RoutinesModal";
 
 interface Message {
   id: string;
@@ -45,6 +46,7 @@ const JarvisInterface = () => {
   const [vadEnabled, setVadEnabled] = useState(false);
   const [contactsModalOpen, setContactsModalOpen] = useState(false);
   const [whatsappHistoryOpen, setWhatsappHistoryOpen] = useState(false);
+  const [routinesModalOpen, setRoutinesModalOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -596,7 +598,7 @@ const JarvisInterface = () => {
       />
       <WhatsAppPanel onOpenHistory={() => setWhatsappHistoryOpen(true)} />
       <ContactPickerPanel onOpenContacts={() => setContactsModalOpen(true)} />
-      <NotesPanel />
+      <RoutinesPanel onManageClick={() => setRoutinesModalOpen(true)} />
       <QuickLinksPanel />
       <CommandHistoryPanel />
     </div>
@@ -834,6 +836,12 @@ const JarvisInterface = () => {
       <WhatsAppHistoryModal
         isOpen={whatsappHistoryOpen}
         onClose={() => setWhatsappHistoryOpen(false)}
+      />
+
+      {/* Routines Modal */}
+      <RoutinesModal
+        open={routinesModalOpen}
+        onOpenChange={setRoutinesModalOpen}
       />
     </div>
   );

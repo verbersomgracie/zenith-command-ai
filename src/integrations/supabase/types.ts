@@ -41,6 +41,71 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_routines: {
+        Row: {
+          category: string
+          created_at: string
+          days_of_week: number[]
+          description: string | null
+          id: string
+          is_active: boolean
+          scheduled_time: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          days_of_week?: number[]
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          scheduled_time: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          days_of_week?: number[]
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          scheduled_time?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      routine_completions: {
+        Row: {
+          completed_at: string
+          completion_date: string
+          id: string
+          routine_id: string
+        }
+        Insert: {
+          completed_at?: string
+          completion_date?: string
+          id?: string
+          routine_id: string
+        }
+        Update: {
+          completed_at?: string
+          completion_date?: string
+          id?: string
+          routine_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_completions_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "daily_routines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_messages: {
         Row: {
           body: string

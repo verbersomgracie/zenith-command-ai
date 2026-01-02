@@ -10,6 +10,7 @@ export interface Contact {
   source: string;
   created_at: string;
   updated_at: string;
+  user_id: string;
 }
 
 export function useContacts() {
@@ -57,9 +58,19 @@ export function useContacts() {
     }
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Não autenticado",
+          description: "Você precisa estar logado para adicionar contatos.",
+        });
+        return null;
+      }
+
       const { data, error } = await supabase
         .from("contacts")
-        .insert({ name: name.trim(), phone_e164, source })
+        .insert({ name: name.trim(), phone_e164, source, user_id: user.id })
         .select()
         .single();
       
@@ -172,6 +183,16 @@ export function useContacts() {
   }, [toast]);
 
   const importContacts = useCallback(async (rawContacts: Array<{ name: string; tel: string[] }>) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Não autenticado",
+        description: "Você precisa estar logado para importar contatos.",
+      });
+      return { imported: 0, skipped: 0 };
+    }
+
     let imported = 0;
     let skipped = 0;
     
@@ -196,7 +217,8 @@ export function useContacts() {
           .insert({ 
             name: contact.name || "Sem nome", 
             phone_e164, 
-            source: "device" 
+            source: "device",
+            user_id: user.id
           });
         
         if (error) {

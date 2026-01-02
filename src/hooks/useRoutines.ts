@@ -90,6 +90,9 @@ export const useRoutines = () => {
     if (!routine) return;
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       if (routine.isCompletedToday) {
         // Remove completion
         const { error } = await supabase
@@ -104,6 +107,7 @@ export const useRoutines = () => {
         const { error } = await supabase.from("routine_completions").insert({
           routine_id: routineId,
           completion_date: today,
+          user_id: user.id,
         });
 
         if (error) throw error;
@@ -140,9 +144,12 @@ export const useRoutines = () => {
     category: string;
   }) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
       const { data, error } = await supabase
         .from("daily_routines")
-        .insert(routine)
+        .insert({ ...routine, user_id: user.id })
         .select()
         .single();
 

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame, Headphones } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame, Headphones, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceCommands } from "@/hooks/useVoiceCommands";
@@ -10,6 +10,7 @@ import { useRealTimeData } from "@/hooks/useRealTimeData";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useContacts } from "@/hooks/useContacts";
 import { useCapacitor } from "@/hooks/useCapacitor";
+import { useAuth } from "@/hooks/useAuth";
 import JarvisCore from "./JarvisCore";
 import DateTimePanel from "./hud/DateTimePanel";
 import SystemStatusPanel from "./hud/SystemStatusPanel";
@@ -57,6 +58,7 @@ const JarvisInterface = () => {
   const isMobile = useIsMobile();
   const { contacts, findContactByName } = useContacts();
   const { isNative, platform, vibrate } = useCapacitor();
+  const { signOut } = useAuth();
   
   // Real-time device data
   const realTimeData = useRealTimeData();
@@ -749,6 +751,16 @@ const JarvisInterface = () => {
             className={`p-2 rounded ${voiceEnabled ? "text-primary bg-primary/10" : "text-muted-foreground"}`}
           >
             {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={async () => {
+              await signOut();
+              toast({ title: "Desconectado", description: "Você foi desconectado com sucesso." });
+            }}
+            className="p-2 rounded text-muted-foreground hover:text-red-400 hover:bg-red-400/10"
+            title="Sair"
+          >
+            <LogOut className="w-4 h-4" />
           </button>
           <div className={`p-2 rounded ${realTimeData.device.network.online ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"}`}>
             <Power className="w-4 h-4" />

@@ -297,42 +297,72 @@ async function resolveContactByName(name: string): Promise<string> {
   }
 }
 
-// Simulate function execution (in production, these would interact with the database)
+// Helper to get random response variant
+function getRandomVariant(variants: string[]): string {
+  return variants[Math.floor(Math.random() * variants.length)];
+}
+
+// Elegant JARVIS-style function responses
 function executeFunctionCall(name: string, args: Record<string, unknown>): string {
   console.log(`Executing function: ${name}`, args);
   
   switch (name) {
     case "create_task":
+      const createTaskResponses = [
+        `Tarefa "${args.title}" registrada com prioridade ${args.priority}${args.due_date ? `, prazo em ${args.due_date}` : ''}. Providenciarei lembretes oportunos, Senhor.`,
+        `Certamente, Senhor. "${args.title}" foi adicionada à sua lista com prioridade ${args.priority}. Manterei o acompanhamento.`,
+        `Tarefa criada com êxito: "${args.title}". Prioridade: ${args.priority}. Estarei monitorando o progresso, Senhor.`,
+      ];
       return JSON.stringify({
         success: true,
-        message: `Task "${args.title}" created with ${args.priority} priority${args.due_date ? ` due on ${args.due_date}` : ''}${args.category ? ` in category ${args.category}` : ''}.`
+        message: getRandomVariant(createTaskResponses)
       });
     
     case "list_tasks":
+      const listTasksResponses = [
+        "Aqui está um resumo das suas tarefas pendentes, Senhor. Sugiro priorizar as de alta urgência.",
+        "Suas tarefas atuais, Senhor. Devo mencionar que há itens de alta prioridade aguardando atenção.",
+        "Compilei sua lista de tarefas, Senhor. Permita-me destacar os itens mais urgentes.",
+      ];
       return JSON.stringify({
         success: true,
         tasks: [
-          { title: "Review quarterly report", priority: "high", status: "pending" },
-          { title: "Team meeting preparation", priority: "medium", status: "pending" },
-          { title: "Update project documentation", priority: "low", status: "pending" }
+          { title: "Revisar relatório trimestral", priority: "high", status: "pending" },
+          { title: "Preparação para reunião", priority: "medium", status: "pending" },
+          { title: "Atualizar documentação", priority: "low", status: "pending" }
         ],
-        message: "Retrieved 3 pending tasks."
+        message: getRandomVariant(listTasksResponses)
       });
     
     case "complete_task":
+      const completeTaskResponses = [
+        `Tarefa "${args.task_title}" marcada como concluída. Excelente progresso, Senhor.`,
+        `"${args.task_title}" finalizada com sucesso. Mais um item riscado da lista, Senhor.`,
+        `Registrado. "${args.task_title}" está completa. Eficiência admirável, se me permite dizer.`,
+      ];
       return JSON.stringify({
         success: true,
-        message: `Task "${args.task_title}" has been marked as complete. Well done.`
+        message: getRandomVariant(completeTaskResponses)
       });
     
     case "add_expense":
+      const addExpenseResponses = [
+        `Despesa de R$ ${args.amount} para "${args.description}" registrada na categoria ${args.category}. Manterei o controle orçamentário, Senhor.`,
+        `Anotado, Senhor. R$ ${args.amount} em ${args.category} para "${args.description}". Seu orçamento foi atualizado.`,
+        `Despesa catalogada: R$ ${args.amount} - "${args.description}". Categoria: ${args.category}. O balanço foi ajustado.`,
+      ];
       return JSON.stringify({
         success: true,
-        message: `Expense of $${args.amount} for "${args.description}" logged under ${args.category}.`
+        message: getRandomVariant(addExpenseResponses)
       });
     
     case "get_financial_summary":
       const period = args.period || "month";
+      const financialResponses = [
+        `Análise financeira do período: R$ 1.247,50 gastos de um orçamento de R$ 2.000. Restam R$ 752,50. Situação estável, Senhor.`,
+        `Seu resumo financeiro, Senhor. Gastos: R$ 1.247,50. Orçamento disponível: R$ 752,50. Recomendo cautela com despesas não essenciais.`,
+        `Relatório financeiro compilado. Utilizados 62% do orçamento mensal. Margem de R$ 752,50 ainda disponível, Senhor.`,
+      ];
       return JSON.stringify({
         success: true,
         summary: {
@@ -341,62 +371,80 @@ function executeFunctionCall(name: string, args: Record<string, unknown>): strin
           budget: 2000,
           remaining: 752.50,
           top_categories: [
-            { category: "food", amount: 450 },
-            { category: "transport", amount: 280 },
-            { category: "utilities", amount: 200 }
+            { category: "alimentação", amount: 450 },
+            { category: "transporte", amount: 280 },
+            { category: "utilidades", amount: 200 }
           ]
         },
-        message: `This ${period}: $1,247.50 spent of $2,000 budget. $752.50 remaining.`
+        message: getRandomVariant(financialResponses)
       });
     
     case "log_habit":
+      const logHabitResponses = [
+        `Hábito "${args.habit_name}" registrado para hoje. Sequência atual: 8 dias. Consistência notável, Senhor.`,
+        `"${args.habit_name}" marcado como completo. Oito dias consecutivos. A disciplina faz a diferença, Senhor.`,
+        `Anotado, Senhor. "${args.habit_name}" concluído. Sua dedicação continua impressionante.`,
+      ];
       return JSON.stringify({
         success: true,
-        message: `Habit "${args.habit_name}" logged for today. ${args.notes ? `Notes: ${args.notes}` : ''} Current streak: 8 days.`
+        message: getRandomVariant(logHabitResponses)
       });
     
     case "get_habit_stats":
+      const habitStatsResponses = [
+        "Suas estatísticas de hábitos, Senhor. O hábito de leitura apresenta a maior sequência: 21 dias. Resultados admiráveis.",
+        "Análise de hábitos compilada. Destaque para leitura com 21 dias consecutivos e 93% de consistência, Senhor.",
+        "Aqui estão seus dados de hábitos, Senhor. Devo dizer que os números são bastante satisfatórios.",
+      ];
       return JSON.stringify({
         success: true,
         habits: [
-          { name: "Morning Meditation", streak: 14, completion_rate: 87 },
-          { name: "Exercise", streak: 5, completion_rate: 72 },
-          { name: "Reading", streak: 21, completion_rate: 93 }
+          { name: "Meditação Matinal", streak: 14, completion_rate: 87 },
+          { name: "Exercício", streak: 5, completion_rate: 72 },
+          { name: "Leitura", streak: 21, completion_rate: 93 }
         ],
-        message: "Retrieved habit statistics. Your reading habit has the longest streak at 21 days."
+        message: getRandomVariant(habitStatsResponses)
       });
     
     case "create_reminder":
+      const reminderResponses = [
+        `Lembrete configurado: "${args.message}" para ${args.time}. Garantirei que seja notificado pontualmente, Senhor.`,
+        `Certamente, Senhor. Lembrarei o senhor sobre "${args.message}" em ${args.time}.`,
+        `Anotado. "${args.message}" agendado para ${args.time}. Pode contar comigo, Senhor.`,
+      ];
       return JSON.stringify({
         success: true,
-        message: `Reminder set: "${args.message}" for ${args.time}.`
+        message: getRandomVariant(reminderResponses)
       });
     
     case "get_daily_briefing":
+      const briefingResponses = [
+        "Seu briefing diário, Senhor. Cinco tarefas pendentes, duas de alta prioridade. Dois de cinco hábitos concluídos. Orçamento dentro do planejado com R$ 752,50 disponíveis.",
+        "Relatório do dia, Senhor. Há tarefas prioritárias aguardando atenção. Progresso satisfatório nos hábitos. Finanças estáveis.",
+        "Situação atual, Senhor: 5 tarefas pendentes, 2 urgentes. Hábitos em 40% hoje. Orçamento sob controle. Algum foco específico?",
+      ];
       return JSON.stringify({
         success: true,
         briefing: {
-          date: new Date().toLocaleDateString(),
+          date: new Date().toLocaleDateString("pt-BR"),
           pending_tasks: 5,
           high_priority_tasks: 2,
           habits_completed_today: 2,
           habits_remaining: 3,
-          budget_status: "On track",
+          budget_status: "Sob controle",
           reminders_today: 1
         },
-        message: "Good evening. You have 5 pending tasks (2 high priority). 2 of 5 habits completed today. Budget is on track with $752.50 remaining this month."
+        message: getRandomVariant(briefingResponses)
       });
     
     case "resolve_contact_by_name":
-      // This will be handled separately with async
       return "RESOLVE_CONTACT";
     
     case "send_whatsapp_message":
-      // This will call the jarvis-whatsapp-twilio edge function
       return "CALL_WHATSAPP_FUNCTION";
     
     default:
-      return JSON.stringify({ success: false, message: "Unknown function" });
+      return JSON.stringify({ success: false, message: "Função não reconhecida, Senhor. Poderia reformular o pedido?" });
   }
 }
 

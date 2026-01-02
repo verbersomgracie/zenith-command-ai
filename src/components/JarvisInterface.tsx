@@ -358,8 +358,13 @@ const JarvisInterface = () => {
     if (ctx.state === "suspended") ctx.resume();
   };
 
+  // Track if already speaking to prevent duplicate calls
+  const isSpeakingRef = useRef(false);
+  
   const speakText = async (text: string) => {
-    if (!voiceEnabled) return;
+    if (!voiceEnabled || isSpeakingRef.current) return;
+    isSpeakingRef.current = true;
+    
     try {
       setIsSpeaking(true);
       const response = await fetch(
@@ -394,16 +399,19 @@ const JarvisInterface = () => {
 
       audio.onended = () => {
         setIsSpeaking(false);
+        isSpeakingRef.current = false;
         URL.revokeObjectURL(audioUrl);
       };
       audio.onerror = () => {
         setIsSpeaking(false);
+        isSpeakingRef.current = false;
         URL.revokeObjectURL(audioUrl);
       };
       await audio.play();
     } catch (error) {
       console.error("TTS error:", error);
       setIsSpeaking(false);
+      isSpeakingRef.current = false;
     }
   };
 
@@ -412,6 +420,7 @@ const JarvisInterface = () => {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       setIsSpeaking(false);
+      isSpeakingRef.current = false;
     }
   };
 

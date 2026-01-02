@@ -9,8 +9,5 @@ verify_jwt = false
 [functions.jarvis-whatsapp-twilio]
 verify_jwt = false
 
-[functions.jarvis-whatsapp-webhook]
-verify_jwt = false
-
 [functions.realtime-token]
 verify_jwt = false

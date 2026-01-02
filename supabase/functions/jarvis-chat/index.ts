@@ -255,6 +255,78 @@ const tools = [
         required: ["title", "scheduled_time"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_routines",
+      description: "List the user's daily routines. Use when user asks about their routines, schedules, or what they need to do today. Examples: 'quais são minhas rotinas', 'rotinas de hoje', 'o que tenho para fazer', 'minha agenda de rotinas'.",
+      parameters: {
+        type: "object",
+        properties: {
+          filter: { 
+            type: "string", 
+            enum: ["today", "all", "pending", "completed"], 
+            description: "Filter type. 'today' for today's routines, 'all' for all routines, 'pending' for not completed today, 'completed' for completed today." 
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "complete_routine",
+      description: "Mark a routine as completed for today. Use when user says they finished, completed, or did a routine. Examples: 'completei tomar remédio', 'fiz exercício', 'marcar leitura como feita', 'terminei meditação'.",
+      parameters: {
+        type: "object",
+        properties: {
+          routine_title: { type: "string", description: "Title or partial title of the routine to mark as complete" }
+        },
+        required: ["routine_title"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_routine",
+      description: "Delete/remove a daily routine permanently. Use when user wants to remove, delete, or cancel a routine. Examples: 'remover rotina de leitura', 'apagar rotina', 'deletar exercício da lista'.",
+      parameters: {
+        type: "object",
+        properties: {
+          routine_title: { type: "string", description: "Title or partial title of the routine to delete" }
+        },
+        required: ["routine_title"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_routine",
+      description: "Update/edit an existing routine. Use when user wants to change the time, days, or details of a routine. Examples: 'mudar horário de tomar remédio para 9h', 'alterar rotina de exercício', 'editar leitura para segunda a sexta'.",
+      parameters: {
+        type: "object",
+        properties: {
+          routine_title: { type: "string", description: "Title or partial title of the routine to update" },
+          new_title: { type: "string", description: "New title (optional)" },
+          new_time: { type: "string", description: "New scheduled time in HH:MM format (optional)" },
+          new_days: { 
+            type: "array", 
+            items: { type: "number" },
+            description: "New days of week (0=Sunday..6=Saturday) (optional)" 
+          },
+          new_category: { 
+            type: "string", 
+            enum: ["health", "fitness", "morning", "study", "wellness", "general"], 
+            description: "New category (optional)" 
+          },
+          is_active: { type: "boolean", description: "Enable/disable the routine (optional)" }
+        },
+        required: ["routine_title"]
+      }
+    }
   }
 ];
 
@@ -472,6 +544,18 @@ function executeFunctionCall(name: string, args: Record<string, unknown>): strin
     case "create_routine":
       return "CREATE_ROUTINE";
     
+    case "list_routines":
+      return "LIST_ROUTINES";
+    
+    case "complete_routine":
+      return "COMPLETE_ROUTINE";
+    
+    case "delete_routine":
+      return "DELETE_ROUTINE";
+    
+    case "update_routine":
+      return "UPDATE_ROUTINE";
+    
     default:
       return JSON.stringify({ success: false, message: "Função não reconhecida, Senhor. Poderia reformular o pedido?" });
   }
@@ -681,6 +765,289 @@ Use este histórico para lembrar de conversas passadas, preferências do usuári
             result = JSON.stringify({
               success: false,
               message: `Erro ao criar rotina: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+            });
+          }
+        }
+        
+        // Handle list routines
+        if (result === "LIST_ROUTINES") {
+          try {
+            const supabase = getSupabaseClient();
+            const today = new Date().toISOString().split("T")[0];
+            const currentDayOfWeek = new Date().getDay();
+            const filter = args.filter || "today";
+            
+            // Fetch routines
+            let routinesQuery = supabase
+              .from("daily_routines")
+              .select("*")
+              .eq("is_active", true)
+              .order("scheduled_time", { ascending: true });
+            
+            const { data: routines, error: routinesError } = await routinesQuery;
+            
+            if (routinesError) {
+              result = JSON.stringify({
+                success: false,
+                message: `Erro ao buscar rotinas: ${routinesError.message}`
+              });
+            } else {
+              // Fetch today's completions
+              const { data: completions } = await supabase
+                .from("routine_completions")
+                .select("routine_id")
+                .eq("completion_date", today);
+              
+              const completedIds = new Set(completions?.map(c => c.routine_id) || []);
+              
+              let filteredRoutines = routines || [];
+              
+              if (filter === "today") {
+                filteredRoutines = filteredRoutines.filter(r => r.days_of_week.includes(currentDayOfWeek));
+              }
+              
+              const routinesWithStatus = filteredRoutines.map(r => ({
+                ...r,
+                completed_today: completedIds.has(r.id)
+              }));
+              
+              if (filter === "pending") {
+                filteredRoutines = routinesWithStatus.filter(r => !r.completed_today && r.days_of_week.includes(currentDayOfWeek));
+              } else if (filter === "completed") {
+                filteredRoutines = routinesWithStatus.filter(r => r.completed_today);
+              }
+              
+              const pendingCount = routinesWithStatus.filter(r => !r.completed_today && r.days_of_week.includes(currentDayOfWeek)).length;
+              const completedCount = routinesWithStatus.filter(r => r.completed_today).length;
+              
+              const listResponses = [
+                `Suas rotinas do dia, Senhor. ${completedCount} concluídas, ${pendingCount} pendentes.`,
+                `Aqui está sua agenda, Senhor. Progresso atual: ${completedCount} de ${completedCount + pendingCount} rotinas completadas.`,
+                `Compilei suas rotinas, Senhor. ${pendingCount > 0 ? `Ainda restam ${pendingCount} itens aguardando atenção.` : "Todas as rotinas do dia foram concluídas. Excelente, Senhor."}`
+              ];
+              
+              result = JSON.stringify({
+                success: true,
+                routines: routinesWithStatus,
+                summary: { completed: completedCount, pending: pendingCount, total: routinesWithStatus.length },
+                message: getRandomVariant(listResponses)
+              });
+            }
+          } catch (error) {
+            console.error("Error in list_routines:", error);
+            result = JSON.stringify({
+              success: false,
+              message: `Erro ao listar rotinas: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+            });
+          }
+        }
+        
+        // Handle complete routine
+        if (result === "COMPLETE_ROUTINE") {
+          try {
+            const supabase = getSupabaseClient();
+            const today = new Date().toISOString().split("T")[0];
+            const searchTerm = args.routine_title.toLowerCase().trim();
+            
+            // Find the routine by title
+            const { data: routines, error: findError } = await supabase
+              .from("daily_routines")
+              .select("*")
+              .eq("is_active", true)
+              .ilike("title", `%${searchTerm}%`)
+              .limit(5);
+            
+            if (findError || !routines || routines.length === 0) {
+              result = JSON.stringify({
+                success: false,
+                message: `Não encontrei uma rotina com o nome "${args.routine_title}", Senhor. Verifique o nome e tente novamente.`
+              });
+            } else {
+              const routine = routines[0];
+              
+              // Check if already completed today
+              const { data: existing } = await supabase
+                .from("routine_completions")
+                .select("id")
+                .eq("routine_id", routine.id)
+                .eq("completion_date", today)
+                .single();
+              
+              if (existing) {
+                result = JSON.stringify({
+                  success: true,
+                  already_completed: true,
+                  message: `A rotina "${routine.title}" já foi marcada como concluída hoje, Senhor.`
+                });
+              } else {
+                // Mark as completed
+                const { error: insertError } = await supabase
+                  .from("routine_completions")
+                  .insert({
+                    routine_id: routine.id,
+                    completion_date: today
+                  });
+                
+                if (insertError) {
+                  result = JSON.stringify({
+                    success: false,
+                    message: `Erro ao marcar rotina como concluída: ${insertError.message}`
+                  });
+                } else {
+                  const completeResponses = [
+                    `"${routine.title}" marcada como concluída. Excelente progresso, Senhor.`,
+                    `Registrado, Senhor. "${routine.title}" finalizada com sucesso. Mais um item riscado da lista.`,
+                    `"${routine.title}" concluída. Sua dedicação continua impressionante, Senhor.`
+                  ];
+                  
+                  result = JSON.stringify({
+                    success: true,
+                    routine: routine,
+                    message: getRandomVariant(completeResponses)
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error in complete_routine:", error);
+            result = JSON.stringify({
+              success: false,
+              message: `Erro ao completar rotina: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+            });
+          }
+        }
+        
+        // Handle delete routine
+        if (result === "DELETE_ROUTINE") {
+          try {
+            const supabase = getSupabaseClient();
+            const searchTerm = args.routine_title.toLowerCase().trim();
+            
+            // Find the routine
+            const { data: routines, error: findError } = await supabase
+              .from("daily_routines")
+              .select("*")
+              .ilike("title", `%${searchTerm}%`)
+              .limit(5);
+            
+            if (findError || !routines || routines.length === 0) {
+              result = JSON.stringify({
+                success: false,
+                message: `Não encontrei uma rotina com o nome "${args.routine_title}", Senhor.`
+              });
+            } else {
+              const routine = routines[0];
+              
+              // Delete the routine
+              const { error: deleteError } = await supabase
+                .from("daily_routines")
+                .delete()
+                .eq("id", routine.id);
+              
+              if (deleteError) {
+                result = JSON.stringify({
+                  success: false,
+                  message: `Erro ao remover rotina: ${deleteError.message}`
+                });
+              } else {
+                const deleteResponses = [
+                  `Rotina "${routine.title}" removida permanentemente, Senhor.`,
+                  `"${routine.title}" foi excluída da sua lista de rotinas, Senhor.`,
+                  `Entendido, Senhor. "${routine.title}" foi removida com sucesso.`
+                ];
+                
+                result = JSON.stringify({
+                  success: true,
+                  deleted_routine: routine.title,
+                  message: getRandomVariant(deleteResponses)
+                });
+              }
+            }
+          } catch (error) {
+            console.error("Error in delete_routine:", error);
+            result = JSON.stringify({
+              success: false,
+              message: `Erro ao deletar rotina: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+            });
+          }
+        }
+        
+        // Handle update routine
+        if (result === "UPDATE_ROUTINE") {
+          try {
+            const supabase = getSupabaseClient();
+            const searchTerm = args.routine_title.toLowerCase().trim();
+            
+            // Find the routine
+            const { data: routines, error: findError } = await supabase
+              .from("daily_routines")
+              .select("*")
+              .ilike("title", `%${searchTerm}%`)
+              .limit(5);
+            
+            if (findError || !routines || routines.length === 0) {
+              result = JSON.stringify({
+                success: false,
+                message: `Não encontrei uma rotina com o nome "${args.routine_title}", Senhor.`
+              });
+            } else {
+              const routine = routines[0];
+              
+              // Build update object
+              const updates: Record<string, unknown> = {};
+              if (args.new_title) updates.title = args.new_title;
+              if (args.new_time) updates.scheduled_time = args.new_time;
+              if (args.new_days) updates.days_of_week = args.new_days;
+              if (args.new_category) updates.category = args.new_category;
+              if (args.is_active !== undefined) updates.is_active = args.is_active;
+              
+              if (Object.keys(updates).length === 0) {
+                result = JSON.stringify({
+                  success: false,
+                  message: `Nenhuma alteração especificada para a rotina "${routine.title}", Senhor.`
+                });
+              } else {
+                const { data: updated, error: updateError } = await supabase
+                  .from("daily_routines")
+                  .update(updates)
+                  .eq("id", routine.id)
+                  .select()
+                  .single();
+                
+                if (updateError) {
+                  result = JSON.stringify({
+                    success: false,
+                    message: `Erro ao atualizar rotina: ${updateError.message}`
+                  });
+                } else {
+                  const changesText = Object.keys(updates).map(k => {
+                    if (k === "title") return `título para "${updates.title}"`;
+                    if (k === "scheduled_time") return `horário para ${updates.scheduled_time}`;
+                    if (k === "days_of_week") return `dias da semana`;
+                    if (k === "category") return `categoria para ${updates.category}`;
+                    if (k === "is_active") return updates.is_active ? "ativada" : "desativada";
+                    return k;
+                  }).join(", ");
+                  
+                  const updateResponses = [
+                    `Rotina "${routine.title}" atualizada: ${changesText}. Alterações salvas, Senhor.`,
+                    `Modificações aplicadas a "${routine.title}": ${changesText}.`,
+                    `Entendido, Senhor. "${routine.title}" foi ajustada conforme solicitado.`
+                  ];
+                  
+                  result = JSON.stringify({
+                    success: true,
+                    routine: updated,
+                    message: getRandomVariant(updateResponses)
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error in update_routine:", error);
+            result = JSON.stringify({
+              success: false,
+              message: `Erro ao atualizar rotina: ${error instanceof Error ? error.message : "Erro desconhecido"}`
             });
           }
         }

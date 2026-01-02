@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame, Headphones, LogOut, Shield } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame, Headphones, LogOut, Shield, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceCommands } from "@/hooks/useVoiceCommands";
@@ -13,6 +13,8 @@ import { useContacts } from "@/hooks/useContacts";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import { useAuth } from "@/hooks/useAuth";
 import JarvisCore from "./JarvisCore";
+import JarvisAudioAgent from "./JarvisAudioAgent";
+import { AgentState } from "@/utils/RealtimeAgent";
 import DateTimePanel from "./hud/DateTimePanel";
 import SystemStatusPanel from "./hud/SystemStatusPanel";
 import WeatherPanel from "./hud/WeatherPanel";
@@ -51,6 +53,8 @@ const JarvisInterface = () => {
   const [whatsappHistoryOpen, setWhatsappHistoryOpen] = useState(false);
   const [routinesModalOpen, setRoutinesModalOpen] = useState(false);
   const [redMode, setRedMode] = useState(false);
+  const [realtimeModeEnabled, setRealtimeModeEnabled] = useState(false);
+  const [realtimeAgentState, setRealtimeAgentState] = useState<AgentState>('idle');
   
   // Cooldown state to prevent listening while JARVIS is preparing to speak or speaking
   const [speakingCooldown, setSpeakingCooldown] = useState(false);
@@ -781,6 +785,21 @@ const JarvisInterface = () => {
             )}
           </button>
           <button
+            onClick={() => setRealtimeModeEnabled(!realtimeModeEnabled)}
+            className={`p-2 rounded relative ${realtimeModeEnabled ? "text-yellow-400 bg-yellow-400/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
+            title={realtimeModeEnabled ? "Desativar modo Realtime" : "Ativar modo Realtime (WebRTC)"}
+          >
+            <Zap className="w-4 h-4" />
+            {realtimeModeEnabled && realtimeAgentState !== 'idle' && (
+              <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full animate-pulse ${
+                realtimeAgentState === 'speaking' ? 'bg-primary' :
+                realtimeAgentState === 'listening' ? 'bg-cyan-400' :
+                realtimeAgentState === 'thinking' ? 'bg-purple-400' :
+                'bg-yellow-400'
+              }`} />
+            )}
+          </button>
+          <button
             onClick={() => setRedMode(!redMode)}
             className={`p-2 rounded ${redMode ? "text-red-400 bg-red-400/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
             title={redMode ? "Desativar modo vermelho" : "Ativar modo vermelho"}
@@ -850,79 +869,105 @@ const JarvisInterface = () => {
           </aside>
         )}
 
-        {/* Center - JARVIS Core */}
+        {/* Center - JARVIS Core or Realtime Agent */}
         <div className="flex-1 flex flex-col items-center justify-center relative px-4">
-          <div className="relative mb-4 md:mb-6">
-            <JarvisCore
-              analyser={analyserRef.current}
-              isSpeaking={isSpeaking}
-              isListening={isListening}
-              isProcessing={isProcessing}
-              wakeWordDetected={wakeWordDetected}
-            />
-          </div>
+          {realtimeModeEnabled ? (
+            /* Realtime Mode - WebRTC Audio Agent */
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="w-full max-w-md"
+            >
+              <div className="text-center mb-4">
+                <span className="text-xs font-mono text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded">
+                  MODO REALTIME (WebRTC)
+                </span>
+              </div>
+              <JarvisAudioAgent 
+                onStateChange={setRealtimeAgentState}
+                className="mb-4"
+              />
+              <p className="text-center text-xs text-muted-foreground">
+                Fale naturalmente. Interrompa a qualquer momento.
+              </p>
+            </motion.div>
+          ) : (
+            /* Standard Mode - Original Interface */
+            <>
+              <div className="relative mb-4 md:mb-6">
+                <JarvisCore
+                  analyser={analyserRef.current}
+                  isSpeaking={isSpeaking}
+                  isListening={isListening}
+                  isProcessing={isProcessing}
+                  wakeWordDetected={wakeWordDetected}
+                />
+              </div>
 
-          {/* Message display */}
-          <AnimatePresence mode="wait">
-            {messages.length > 0 && (
+              {/* Message display */}
+              <AnimatePresence mode="wait">
+                {messages.length > 0 && (
+                  <motion.div
+                    key={messages[messages.length - 1]?.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="max-w-md md:max-w-xl text-center mb-4 md:mb-6 px-4"
+                  >
+                    <p className={`text-sm md:text-base leading-relaxed ${
+                      messages[messages.length - 1]?.role === "assistant" ? "text-foreground" : "text-muted-foreground italic"
+                    }`}>
+                      {messages[messages.length - 1]?.content}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Input area */}
               <motion.div
-                key={messages[messages.length - 1]?.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="max-w-md md:max-w-xl text-center mb-4 md:mb-6 px-4"
+                transition={{ delay: 0.5 }}
+                className="w-full max-w-md md:max-w-lg px-4"
               >
-                <p className={`text-sm md:text-base leading-relaxed ${
-                  messages[messages.length - 1]?.role === "assistant" ? "text-foreground" : "text-muted-foreground italic"
-                }`}>
-                  {messages[messages.length - 1]?.content}
-                </p>
+                <form onSubmit={handleSubmit}>
+                  <div className="bg-card/60 backdrop-blur-sm border border-primary/30 rounded-lg p-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleMicClick}
+                      disabled={!isSupported}
+                      className={`p-2 md:p-3 rounded-full transition-all ${
+                        isListening
+                          ? "bg-green-500/20 text-green-400 animate-pulse border border-green-500/50"
+                          : "hover:bg-secondary/50 text-muted-foreground hover:text-primary"
+                      } ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+                    </button>
+
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder={isListening ? "Ouvindo..." : "Digite um comando..."}
+                      disabled={isProcessing || isListening}
+                      className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm py-2 disabled:opacity-50"
+                    />
+
+                    <button
+                      type="submit"
+                      disabled={!input.trim() || isProcessing}
+                      className="p-2 md:p-3 rounded-full bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Send className="w-5 h-5" />
+                    </button>
+                  </div>
+                </form>
               </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Input area */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="w-full max-w-md md:max-w-lg px-4"
-          >
-            <form onSubmit={handleSubmit}>
-              <div className="bg-card/60 backdrop-blur-sm border border-primary/30 rounded-lg p-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleMicClick}
-                  disabled={!isSupported}
-                  className={`p-2 md:p-3 rounded-full transition-all ${
-                    isListening
-                      ? "bg-green-500/20 text-green-400 animate-pulse border border-green-500/50"
-                      : "hover:bg-secondary/50 text-muted-foreground hover:text-primary"
-                  } ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-                </button>
-
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder={isListening ? "Ouvindo..." : "Digite um comando..."}
-                  disabled={isProcessing || isListening}
-                  className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm py-2 disabled:opacity-50"
-                />
-
-                <button
-                  type="submit"
-                  disabled={!input.trim() || isProcessing}
-                  className="p-2 md:p-3 rounded-full bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-            </form>
-          </motion.div>
+            </>
+          )}
         </div>
 
         {/* Right Panel - Desktop only */}

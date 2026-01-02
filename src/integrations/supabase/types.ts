@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          ip_address: string | null
+          record_id: string | null
+          table_name: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          record_id?: string | null
+          table_name: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          ip_address?: string | null
+          record_id?: string | null
+          table_name?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
           created_at: string
@@ -189,7 +225,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      log_audit_event: {
+        Args: {
+          p_action: string
+          p_details?: Json
+          p_record_id?: string
+          p_table_name: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

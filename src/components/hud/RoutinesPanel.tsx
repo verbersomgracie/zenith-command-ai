@@ -1,8 +1,10 @@
 import { motion } from "framer-motion";
-import { CheckCircle2, Circle, Clock, Plus, Pill, Dumbbell, Coffee, Book, Heart, Settings } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Plus, Pill, Dumbbell, Coffee, Book, Heart, Settings, Bell, BellOff } from "lucide-react";
 import HudPanel from "./HudPanel";
 import { useRoutines, RoutineWithStatus } from "@/hooks/useRoutines";
+import { useRoutineNotifications } from "@/hooks/useRoutineNotifications";
 import { Progress } from "@/components/ui/progress";
+import { useState, useEffect } from "react";
 
 interface RoutinesPanelProps {
   onManageClick?: () => void;
@@ -28,6 +30,27 @@ const categoryColors: Record<string, string> = {
 
 const RoutinesPanel = ({ onManageClick }: RoutinesPanelProps) => {
   const { routines, isLoading, toggleRoutineCompletion, getCompletionPercentage } = useRoutines();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    return localStorage.getItem("jarvis-routine-notifications") === "true";
+  });
+
+  const { permissionState, requestPermission, isSupported } = useRoutineNotifications({
+    routines,
+    enabled: notificationsEnabled,
+  });
+
+  const handleToggleNotifications = async () => {
+    if (!notificationsEnabled) {
+      const granted = await requestPermission();
+      if (granted) {
+        setNotificationsEnabled(true);
+        localStorage.setItem("jarvis-routine-notifications", "true");
+      }
+    } else {
+      setNotificationsEnabled(false);
+      localStorage.setItem("jarvis-routine-notifications", "false");
+    }
+  };
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
@@ -36,6 +59,10 @@ const RoutinesPanel = ({ onManageClick }: RoutinesPanelProps) => {
 
   const completionPercentage = getCompletionPercentage();
 
+  const notificationIcon = notificationsEnabled && permissionState === "granted" 
+    ? <Bell className="w-3 h-3 text-green-400" />
+    : <BellOff className="w-3 h-3" />;
+
   return (
     <HudPanel 
       title="Rotinas do Dia" 
@@ -43,14 +70,25 @@ const RoutinesPanel = ({ onManageClick }: RoutinesPanelProps) => {
       variant="bordered" 
       compact
       action={
-        onManageClick && (
-          <button
-            onClick={onManageClick}
-            className="text-primary/60 hover:text-primary transition-colors"
-          >
-            <Settings className="w-3 h-3" />
-          </button>
-        )
+        <div className="flex items-center gap-1">
+          {isSupported && (
+            <button
+              onClick={handleToggleNotifications}
+              className="text-primary/60 hover:text-primary transition-colors"
+              title={notificationsEnabled ? "Desativar notificações" : "Ativar notificações"}
+            >
+              {notificationIcon}
+            </button>
+          )}
+          {onManageClick && (
+            <button
+              onClick={onManageClick}
+              className="text-primary/60 hover:text-primary transition-colors"
+            >
+              <Settings className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       }
     >
       <div className="space-y-2">

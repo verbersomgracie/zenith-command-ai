@@ -1,9 +1,16 @@
 /**
  * OpenAI Realtime API WebRTC Connection Handler
  * Handles bidirectional audio streaming with JARVIS AI agent
+ * Supports function calling for tool execution
  */
 
 export type AgentState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error';
+
+export interface FunctionCall {
+  call_id: string;
+  name: string;
+  arguments: string;
+}
 
 export interface RealtimeAgentCallbacks {
   onStateChange: (state: AgentState) => void;
@@ -11,6 +18,7 @@ export interface RealtimeAgentCallbacks {
   onError: (error: string) => void;
   onConnected: () => void;
   onDisconnected: () => void;
+  onFunctionCall?: (call: FunctionCall) => Promise<string>;
 }
 
 export class RealtimeAgent {
@@ -21,6 +29,9 @@ export class RealtimeAgent {
   private callbacks: RealtimeAgentCallbacks;
   private currentState: AgentState = 'idle';
   private isUserSpeaking = false;
+  
+  // Track function call arguments as they stream in
+  private pendingFunctionCalls: Map<string, { name: string; arguments: string }> = new Map();
 
   constructor(callbacks: RealtimeAgentCallbacks) {
     this.callbacks = callbacks;
@@ -153,7 +164,7 @@ export class RealtimeAgent {
     };
   }
 
-  private handleServerEvent(event: any) {
+  private async handleServerEvent(event: any) {
     console.log('[RealtimeAgent] Event:', event.type);
 
     switch (event.type) {
@@ -217,6 +228,39 @@ export class RealtimeAgent {
         console.log('[RealtimeAgent] Audio response complete');
         break;
 
+      // Function call events
+      case 'response.function_call_arguments.delta':
+        // Stream function call arguments
+        const itemId = event.item_id;
+        const callId = event.call_id;
+        if (!this.pendingFunctionCalls.has(callId)) {
+          this.pendingFunctionCalls.set(callId, { name: '', arguments: '' });
+        }
+        const pending = this.pendingFunctionCalls.get(callId)!;
+        pending.arguments += event.delta || '';
+        break;
+
+      case 'response.function_call_arguments.done':
+        console.log('[RealtimeAgent] Function call complete:', event.name, event.arguments);
+        await this.handleFunctionCall({
+          call_id: event.call_id,
+          name: event.name,
+          arguments: event.arguments,
+        });
+        break;
+
+      case 'response.output_item.added':
+        // Track function call name when item is added
+        if (event.item?.type === 'function_call') {
+          const callId = event.item.call_id;
+          if (!this.pendingFunctionCalls.has(callId)) {
+            this.pendingFunctionCalls.set(callId, { name: event.item.name || '', arguments: '' });
+          } else {
+            this.pendingFunctionCalls.get(callId)!.name = event.item.name || '';
+          }
+        }
+        break;
+
       case 'response.done':
         console.log('[RealtimeAgent] Response complete');
         if (!this.isUserSpeaking) {
@@ -233,6 +277,57 @@ export class RealtimeAgent {
         // Handle other events as needed
         break;
     }
+  }
+
+  private async handleFunctionCall(call: FunctionCall) {
+    console.log('[RealtimeAgent] Handling function call:', call.name);
+    
+    if (!this.callbacks.onFunctionCall) {
+      console.warn('[RealtimeAgent] No function call handler registered');
+      this.sendFunctionResult(call.call_id, JSON.stringify({ error: 'Function handler not available' }));
+      return;
+    }
+
+    try {
+      // Execute the function via callback
+      const result = await this.callbacks.onFunctionCall(call);
+      
+      // Send result back to the model
+      this.sendFunctionResult(call.call_id, result);
+      
+    } catch (error) {
+      console.error('[RealtimeAgent] Function call error:', error);
+      this.sendFunctionResult(call.call_id, JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }));
+    }
+    
+    // Clean up pending call
+    this.pendingFunctionCalls.delete(call.call_id);
+  }
+
+  private sendFunctionResult(callId: string, result: string) {
+    if (!this.dc || this.dc.readyState !== 'open') {
+      console.error('[RealtimeAgent] Cannot send function result - data channel not ready');
+      return;
+    }
+
+    console.log('[RealtimeAgent] Sending function result for call:', callId);
+
+    // Create the function call output item
+    const outputEvent = {
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: callId,
+        output: result,
+      },
+    };
+
+    this.dc.send(JSON.stringify(outputEvent));
+
+    // Trigger model to respond with the function result
+    this.dc.send(JSON.stringify({ type: 'response.create' }));
   }
 
   private cancelCurrentResponse() {
@@ -288,6 +383,7 @@ export class RealtimeAgent {
       this.pc = null;
     }
 
+    this.pendingFunctionCalls.clear();
     this.audioEl.srcObject = null;
     this.setState('idle');
     this.callbacks.onDisconnected();

@@ -1,11 +1,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Power, MessageSquare, Send } from 'lucide-react';
+import { Mic, MicOff, Power, MessageSquare, Send, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { RealtimeAgent, AgentState } from '@/utils/RealtimeAgent';
+import { RealtimeAgent, AgentState, FunctionCall } from '@/utils/RealtimeAgent';
+import { useRealtimeTools } from '@/hooks/useRealtimeTools';
 import JarvisCore from './JarvisCore';
 
 interface Message {
@@ -24,10 +25,12 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
   className = '' 
 }) => {
   const { toast } = useToast();
+  const { handleFunctionCall } = useRealtimeTools();
   const [state, setState] = useState<AgentState>('idle');
   const [messages, setMessages] = useState<Message[]>([]);
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+  const [isExecutingTool, setIsExecutingTool] = useState(false);
   const agentRef = useRef<RealtimeAgent | null>(null);
   
   // Audio analyser for JarvisCore visualization
@@ -60,7 +63,7 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
   const handleConnected = useCallback(() => {
     toast({
       title: 'JARVIS Online',
-      description: 'Conexão de áudio estabelecida. Pode falar.',
+      description: 'Conexão de áudio estabelecida com suporte a comandos.',
     });
     
     // Set up audio analyser for visualization
@@ -72,6 +75,20 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
       setAnalyser(newAnalyser);
     }
   }, [toast]);
+
+  // Handle function calls from the agent
+  const onFunctionCall = useCallback(async (call: FunctionCall): Promise<string> => {
+    console.log('[JarvisAudioAgent] Function call received:', call.name);
+    setIsExecutingTool(true);
+    
+    try {
+      const result = await handleFunctionCall(call);
+      console.log('[JarvisAudioAgent] Function result:', result);
+      return result;
+    } finally {
+      setIsExecutingTool(false);
+    }
+  }, [handleFunctionCall]);
 
   const handleDisconnected = useCallback(() => {
     console.log('[JarvisAudioAgent] Disconnected');
@@ -93,13 +110,14 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
         throw new Error('Falha ao obter token de sessão');
       }
 
-      // Create and connect agent
+      // Create and connect agent with function call support
       agentRef.current = new RealtimeAgent({
         onStateChange: handleStateChange,
         onTranscript: handleTranscript,
         onError: handleError,
         onConnected: handleConnected,
         onDisconnected: handleDisconnected,
+        onFunctionCall: onFunctionCall,
       });
 
       await agentRef.current.connect(data.client_secret.value);
@@ -109,7 +127,7 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
       handleError(error instanceof Error ? error.message : 'Falha ao iniciar agente');
       setState('idle');
     }
-  }, [handleStateChange, handleTranscript, handleError, handleConnected, handleDisconnected]);
+  }, [handleStateChange, handleTranscript, handleError, handleConnected, handleDisconnected, onFunctionCall]);
 
   const stopAgent = useCallback(() => {
     agentRef.current?.disconnect();
@@ -188,9 +206,20 @@ const JarvisAudioAgent: React.FC<JarvisAudioAgentProps> = ({
         className="text-center mb-6"
         animate={{ opacity: state === 'connecting' ? 0.5 : 1 }}
       >
-        <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-          {getStateLabel()}
-        </p>
+        <div className="flex items-center justify-center gap-2">
+          {isExecutingTool && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center gap-1 text-primary"
+            >
+              <Wrench className="w-3 h-3 animate-spin" />
+            </motion.div>
+          )}
+          <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            {isExecutingTool ? 'Executando comando...' : getStateLabel()}
+          </p>
+        </div>
       </motion.div>
 
       {/* Last Message Display */}

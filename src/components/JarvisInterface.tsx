@@ -53,7 +53,7 @@ const JarvisInterface = () => {
   const [whatsappHistoryOpen, setWhatsappHistoryOpen] = useState(false);
   const [routinesModalOpen, setRoutinesModalOpen] = useState(false);
   const [redMode, setRedMode] = useState(false);
-  const [realtimeModeEnabled, setRealtimeModeEnabled] = useState(false);
+  const [realtimeModeEnabled, setRealtimeModeEnabled] = useState(true); // Default to realtime mode
   const [realtimeAgentState, setRealtimeAgentState] = useState<AgentState>('idle');
   
   // Cooldown state to prevent listening while JARVIS is preparing to speak or speaking
@@ -872,25 +872,16 @@ const JarvisInterface = () => {
         {/* Center - JARVIS Core or Realtime Agent */}
         <div className="flex-1 flex flex-col items-center justify-center relative px-4">
           {realtimeModeEnabled ? (
-            /* Realtime Mode - WebRTC Audio Agent */
+            /* Realtime Mode - WebRTC Audio Agent with JARVIS UI */
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="w-full max-w-md"
+              className="w-full max-w-lg flex flex-col items-center"
             >
-              <div className="text-center mb-4">
-                <span className="text-xs font-mono text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded">
-                  MODO REALTIME (WebRTC)
-                </span>
-              </div>
               <JarvisAudioAgent 
                 onStateChange={setRealtimeAgentState}
-                className="mb-4"
               />
-              <p className="text-center text-xs text-muted-foreground">
-                Fale naturalmente. Interrompa a qualquer momento.
-              </p>
             </motion.div>
           ) : (
             /* Standard Mode - Original Interface */

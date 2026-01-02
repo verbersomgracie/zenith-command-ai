@@ -73,9 +73,12 @@ const ChatInterface = () => {
   // Save message to database
   const saveMessage = async (role: "user" | "assistant", content: string) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { error } = await supabase
         .from("conversation_history")
-        .insert({ role, content });
+        .insert({ role, content, user_id: user.id });
 
       if (error) {
         console.error("Error saving message:", error);

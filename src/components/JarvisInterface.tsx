@@ -551,10 +551,28 @@ const JarvisInterface = () => {
     if (isBooting || hasGreetedRef.current) return;
     hasGreetedRef.current = true;
     const timer = setTimeout(() => {
+      const hour = new Date().getHours();
+      let timeGreeting: string;
+      let contextMessage: string;
+      
+      if (hour >= 5 && hour < 12) {
+        timeGreeting = "Bom dia";
+        contextMessage = "Pronto para começar o dia.";
+      } else if (hour >= 12 && hour < 18) {
+        timeGreeting = "Boa tarde";
+        contextMessage = "Sistemas operacionais.";
+      } else if (hour >= 18 && hour < 22) {
+        timeGreeting = "Boa noite";
+        contextMessage = "À disposição para o turno noturno.";
+      } else {
+        timeGreeting = "Boa madrugada";
+        contextMessage = "Modo noturno ativado.";
+      }
+      
       const greeting: Message = {
         id: "initial",
         role: "assistant",
-        content: "Sistemas online, Comandante. JARVIS pronto para auxiliá-lo.",
+        content: `${timeGreeting}, Comandante. ${contextMessage}`,
         timestamp: new Date(),
       };
       setMessages([greeting]);

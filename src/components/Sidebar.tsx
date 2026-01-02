@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { 
   MessageSquare, 
   CheckSquare, 
@@ -6,8 +7,10 @@ import {
   Target, 
   BarChart3, 
   Settings,
-  Zap
+  Zap,
+  Shield
 } from "lucide-react";
+import { useAdmin } from "@/hooks/useAdmin";
 
 interface SidebarProps {
   activeTab: string;
@@ -24,6 +27,9 @@ const navItems = [
 ];
 
 const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
+  const navigate = useNavigate();
+  const { isAdmin } = useAdmin();
+
   return (
     <motion.aside
       initial={{ x: -100, opacity: 0 }}
@@ -91,6 +97,23 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
           ))}
         </ul>
       </nav>
+
+      {/* Admin Button - Only visible for admins */}
+      {isAdmin && (
+        <div className="px-2 lg:px-4 pb-4">
+          <motion.button
+            onClick={() => navigate("/admin")}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition-all duration-300"
+          >
+            <Shield className="w-5 h-5" />
+            <span className="hidden lg:block font-medium text-sm">
+              Admin
+            </span>
+          </motion.button>
+        </div>
+      )}
 
       {/* Status indicator */}
       <div className="p-4 border-t border-sidebar-border">

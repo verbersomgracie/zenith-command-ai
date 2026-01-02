@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame, Headphones, LogOut, Shield, Zap } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame, Headphones, LogOut, Shield, Zap, Crown, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceCommands } from "@/hooks/useVoiceCommands";
@@ -12,6 +12,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useContacts } from "@/hooks/useContacts";
 import { useCapacitor } from "@/hooks/useCapacitor";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdmin } from "@/hooks/useAdmin";
 import JarvisCore from "./JarvisCore";
 import JarvisAudioAgent from "./JarvisAudioAgent";
 import { AgentState } from "@/utils/RealtimeAgent";
@@ -69,6 +70,7 @@ const JarvisInterface = () => {
   const { contacts, findContactByName } = useContacts();
   const { isNative, platform, vibrate } = useCapacitor();
   const { signOut } = useAuth();
+  const { isAdmin } = useAdmin();
   
   // Real-time device data
   const realTimeData = useRealTimeData();
@@ -812,12 +814,21 @@ const JarvisInterface = () => {
           >
             {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
+          {isAdmin && (
+            <Link
+              to="/admin"
+              className="p-2 rounded text-primary bg-primary/10 hover:bg-primary/20"
+              title="Painel Admin"
+            >
+              <Crown className="w-4 h-4" />
+            </Link>
+          )}
           <Link
             to="/audit-logs"
             className="p-2 rounded text-muted-foreground hover:text-primary hover:bg-primary/10"
             title="Logs de Auditoria"
           >
-            <Shield className="w-4 h-4" />
+            <FileText className="w-4 h-4" />
           </Link>
           <button
             onClick={async () => {

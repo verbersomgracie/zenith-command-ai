@@ -552,27 +552,42 @@ const JarvisInterface = () => {
     hasGreetedRef.current = true;
     const timer = setTimeout(() => {
       const hour = new Date().getHours();
-      let timeGreeting: string;
-      let contextMessage: string;
+      let greetingText: string;
       
       if (hour >= 5 && hour < 12) {
-        timeGreeting = "Bom dia";
-        contextMessage = "Pronto para começar o dia.";
+        const morningVariants = [
+          "Bom dia, Comandante! Pronto pra começar o dia com tudo?",
+          "E aí, bom dia! Dormiu bem? Vamos nessa!",
+          "Bom dia! O café já tomou? Estou aqui pra ajudar no que precisar.",
+        ];
+        greetingText = morningVariants[Math.floor(Math.random() * morningVariants.length)];
       } else if (hour >= 12 && hour < 18) {
-        timeGreeting = "Boa tarde";
-        contextMessage = "Sistemas operacionais.";
+        const afternoonVariants = [
+          "Boa tarde, Comandante! Como está sendo o dia?",
+          "E aí, boa tarde! Tudo tranquilo por aí?",
+          "Opa, boa tarde! No que posso te ajudar?",
+        ];
+        greetingText = afternoonVariants[Math.floor(Math.random() * afternoonVariants.length)];
       } else if (hour >= 18 && hour < 22) {
-        timeGreeting = "Boa noite";
-        contextMessage = "À disposição para o turno noturno.";
+        const eveningVariants = [
+          "Boa noite, Comandante! Como foi o dia?",
+          "E aí, boa noite! Relaxando um pouco?",
+          "Boa noite! Estou por aqui se precisar de algo.",
+        ];
+        greetingText = eveningVariants[Math.floor(Math.random() * eveningVariants.length)];
       } else {
-        timeGreeting = "Boa madrugada";
-        contextMessage = "Modo noturno ativado.";
+        const nightVariants = [
+          "Opa, ainda acordado? Posso ajudar em algo?",
+          "E aí, Comandante! Queimando a madrugada, hein?",
+          "Fala, chefe! Noite longa hoje?",
+        ];
+        greetingText = nightVariants[Math.floor(Math.random() * nightVariants.length)];
       }
       
       const greeting: Message = {
         id: "initial",
         role: "assistant",
-        content: `${timeGreeting}, Comandante. ${contextMessage}`,
+        content: greetingText,
         timestamp: new Date(),
       };
       setMessages([greeting]);

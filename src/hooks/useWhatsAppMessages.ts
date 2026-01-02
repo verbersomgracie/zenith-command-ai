@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-
+import { useAuditLog } from "@/hooks/useAuditLog";
 export interface WhatsAppMessage {
   id: string;
   message_sid: string;
@@ -21,6 +21,7 @@ export function useWhatsAppMessages() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { logMessageAccess } = useAuditLog();
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -36,6 +37,9 @@ export function useWhatsAppMessages() {
       if (fetchError) throw fetchError;
       
       setMessages(data || []);
+      
+      // Log view access
+      logMessageAccess('view', undefined, { count: data?.length || 0 });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch messages";
       setError(message);

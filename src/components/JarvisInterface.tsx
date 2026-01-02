@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame, Headphones, LogOut } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame, Headphones, LogOut, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceCommands } from "@/hooks/useVoiceCommands";
@@ -752,6 +753,13 @@ const JarvisInterface = () => {
           >
             {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
+          <Link
+            to="/audit-logs"
+            className="p-2 rounded text-muted-foreground hover:text-primary hover:bg-primary/10"
+            title="Logs de Auditoria"
+          >
+            <Shield className="w-4 h-4" />
+          </Link>
           <button
             onClick={async () => {
               await signOut();

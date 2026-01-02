@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users } from "lucide-react";
+import { Send, Mic, MicOff, Volume2, VolumeX, Power, Maximize, Minimize, RefreshCw, Menu, X, Radio, AudioWaveform, Users, Flame } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
 import { useVoiceCommands } from "@/hooks/useVoiceCommands";
@@ -47,6 +47,7 @@ const JarvisInterface = () => {
   const [contactsModalOpen, setContactsModalOpen] = useState(false);
   const [whatsappHistoryOpen, setWhatsappHistoryOpen] = useState(false);
   const [routinesModalOpen, setRoutinesModalOpen] = useState(false);
+  const [redMode, setRedMode] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -605,7 +606,7 @@ const JarvisInterface = () => {
   );
 
   return (
-    <div ref={containerRef} className="min-h-screen h-screen bg-background flex flex-col overflow-hidden relative">
+    <div ref={containerRef} className={`min-h-screen h-screen bg-background flex flex-col overflow-hidden relative ${redMode ? 'red-mode' : ''}`}>
       {/* Boot Sequence */}
       <AnimatePresence>
         {isBooting && <BootSequence onComplete={() => setIsBooting(false)} />}
@@ -664,6 +665,13 @@ const JarvisInterface = () => {
             title={wakeWordEnabled ? "Desativar escuta 'Jarvis'" : "Ativar escuta 'Jarvis'"}
           >
             <Radio className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setRedMode(!redMode)}
+            className={`p-2 rounded ${redMode ? "text-red-400 bg-red-400/10" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
+            title={redMode ? "Desativar modo vermelho" : "Ativar modo vermelho"}
+          >
+            <Flame className="w-4 h-4" />
           </button>
           <button
             onClick={() => setVoiceEnabled(!voiceEnabled)}
